@@ -1,14 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Textarea } from "@/components/ui/textarea"
-import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Copy, Download, RefreshCw, Calendar, TrendingUp, Globe, Zap, Settings, ExternalLink } from "lucide-react"
+import { RefreshCw, Calendar, Globe, Zap, Settings, CheckCircle, Copy, FileText } from "lucide-react"
 
 interface NewsItem {
   id: number | string
@@ -23,156 +20,13 @@ interface NewsItem {
   pub_date?: string
 }
 
-const CATEGORIES = [
-  "한전",
-  "SMR",
-  "원전",
-  "송전",
-  "ESS",
-  "정전",
-  "전력망",
-  "집단에너지",
-  "반월열병합발전",
-  "풍력",
-  "태양광",
-  "RE100",
-  "REC",
-  "수소",
-  "암모니아",
-]
-
-const mockNewsData: NewsItem[] = [
-  {
-    id: "한전-1",
-    title: '기후솔루션 한전 상대로 소송 제기, "계통관리변전소 자료 비공개 부당하다" - 비즈니스포스트',
-    source: "비즈니스포스트",
-    publishedAt: "2025-09-10T10:23:00Z",
-    category: "한전",
-    relevanceScore: 85,
-    url: "https://news.google.com/rss/articles/example1",
-  },
-  {
-    id: "SMR-1",
-    title: '"2039년까지 SMR 60기 건설 목표… 韩과 협력 필수적" - 동아일보',
-    source: "동아일보",
-    publishedAt: "2025-09-11T03:00:00Z",
-    category: "SMR",
-    relevanceScore: 92,
-    url: "https://news.google.com/rss/articles/example2",
-  },
-]
-
 export default function NewsManagementDashboard() {
-  const [selectedNews, setSelectedNews] = useState<(number | string)[]>([])
-  const [formattedOutput, setFormattedOutput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [newsData, setNewsData] = useState<NewsItem[]>(mockNewsData)
-  const [categoryStats, setCategoryStats] = useState<Record<string, number>>({})
-
-  const extractSource = (title: string): string => {
-    console.log("[v0] 제목에서 언론사 추출 시도:", title)
-
-    // 다양한 패턴으로 언론사 추출 시도
-    const patterns = [
-      / - (.+)$/, // "제목 - 언론사" 패턴
-      /$$(.+)$$$/, // "제목(언론사)" 패턴
-      /\[(.+)\]$/, // "제목[언론사]" 패턴
-    ]
-
-    for (const pattern of patterns) {
-      const match = title.match(pattern)
-      if (match && match[1]) {
-        console.log("[v0] 언론사 추출 성공:", match[1])
-        return match[1].trim()
-      }
-    }
-
-    console.log("[v0] 언론사 추출 실패, 기본값 사용: 미분류")
-    return "미분류"
-  }
-
-  const convertMisoDataToNewsItems = (misoData: any[]): NewsItem[] => {
-    return misoData.map((item, index) => {
-      const extractedSource = extractSource(item.title)
-      console.log("[v0] 뉴스 변환:", {
-        title: item.title,
-        extractedSource: extractedSource,
-        category: item.category,
-      })
-
-      return {
-        id: item.id || `news-${index}`,
-        title: item.title,
-        source: extractedSource,
-        publishedAt: item.pub_date ? new Date(item.pub_date).toISOString() : new Date().toISOString(),
-        category: item.category || "기타",
-        relevanceScore: Math.floor(Math.random() * 20) + 80,
-        url: item.link || item.url || "#",
-        link: item.link,
-        pub_date: item.pub_date,
-      }
-    })
-  }
-
-  const filterLast24Hours = (news: NewsItem[]) => {
-    const now = new Date()
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-
-    return news.filter((item) => {
-      const publishedDate = new Date(item.publishedAt)
-      return publishedDate >= twentyFourHoursAgo
-    })
-  }
-
-  const calculateCategoryStats = (news: NewsItem[]) => {
-    const stats: Record<string, number> = {}
-    news.forEach((item) => {
-      stats[item.category] = (stats[item.category] || 0) + 1
-    })
-    return stats
-  }
-
-  const handleNewsSelection = (newsId: number | string, checked: boolean) => {
-    if (checked) {
-      setSelectedNews([...selectedNews, newsId])
-    } else {
-      setSelectedNews(selectedNews.filter((id) => id !== newsId))
-    }
-  }
-
-  const generateFormattedOutput = () => {
-    const selectedNewsItems = newsData.filter((news) => selectedNews.includes(news.id))
-
-    if (selectedNewsItems.length === 0) {
-      setFormattedOutput("")
-      return
-    }
-
-    const basicMessage = `안녕하십니까.
-미래전략부문 대외협력팀입니다.
-오늘의 주요 기사를 게시합니다.
-
-`
-
-    const numberedNewsList = selectedNewsItems
-      .sort((a, b) => b.relevanceScore - a.relevanceScore)
-      .map((news, index) => {
-        const newsNumber = index + 1
-        return `${newsNumber}. [${news.category}] ${news.title.replace(/ - .+$/, "")} (${news.source})`
-      })
-      .join("\n\n")
-
-    setFormattedOutput(basicMessage + numberedNewsList)
-  }
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(formattedOutput)
-      alert("클립보드에 복사되었습니다!")
-    } catch (err) {
-      console.error("복사 실패:", err)
-    }
-  }
+  const [selectedNews, setSelectedNews] = useState<number[]>([])
+  const [newsData, setNewsData] = useState<NewsItem[]>([])
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false)
+  const [collectedNewsCount, setCollectedNewsCount] = useState<number>(0)
+  const [categoryFilter, setCategoryFilter] = useState<string>("전체")
 
   const callNewsAPI = async (): Promise<NewsItem[]> => {
     try {
@@ -193,10 +47,10 @@ export default function NewsManagementDashboard() {
 
       if (result.success) {
         console.log(`[v0] ${result.message}`)
-        return convertMisoDataToNewsItems(result.data)
+        return result.data
       } else {
         console.warn(`[v0] ${result.message}`)
-        return convertMisoDataToNewsItems(result.data || [])
+        return result.data
       }
     } catch (error) {
       console.error("[v0] 뉴스 수집 API 호출 오류:", error)
@@ -204,20 +58,26 @@ export default function NewsManagementDashboard() {
     }
   }
 
+  const filterLast24Hours = (news: NewsItem[]) => {
+    const now = new Date()
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+
+    return news.filter((item) => {
+      const publishedDate = new Date(item.publishedAt)
+      return publishedDate >= twentyFourHoursAgo
+    })
+  }
+
   const refreshNews = async () => {
     setIsLoading(true)
     try {
       const newNewsData = await callNewsAPI()
-
       const filteredNewsData = filterLast24Hours(newNewsData)
-      setNewsData(filteredNewsData)
+      const sortedNewsData = filteredNewsData.sort((a, b) => b.relevanceScore - a.relevanceScore)
 
-      const stats = calculateCategoryStats(filteredNewsData)
-      setCategoryStats(stats)
-
-      console.log(`[v0] 뉴스 수집 완료: 총 ${newNewsData.length}건 중 ${filteredNewsData.length}건 (24시간 이내)`)
-
-      alert(`뉴스 수집이 완료되었습니다! 총 ${filteredNewsData.length}건의 뉴스를 수집했습니다.`)
+      setNewsData(sortedNewsData)
+      setCollectedNewsCount(filteredNewsData.length)
+      setShowSuccessModal(true)
     } catch (error) {
       console.error("[v0] 뉴스 수집 실패:", error)
       alert("뉴스 수집에 실패했습니다. 잠시 후 다시 시도해주세요.")
@@ -226,40 +86,178 @@ export default function NewsManagementDashboard() {
     }
   }
 
-  useEffect(() => {
-    const filtered24HourNews = filterLast24Hours(mockNewsData)
-    setNewsData(filtered24HourNews)
-    setCategoryStats(calculateCategoryStats(filtered24HourNews))
-  }, [])
+  const handleNewsSelection = (id: number | string, checked: boolean) => {
+    const newsId = typeof id === "string" ? Number.parseInt(id) : id
+    setSelectedNews((prevSelectedNews) =>
+      checked ? [...prevSelectedNews, newsId] : prevSelectedNews.filter((news) => news !== newsId),
+    )
+  }
+
+  const handleNewsClick = (url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer")
+  }
+
+  const getSelectedNewsData = () => {
+    return newsData.filter((news) =>
+      selectedNews.includes(typeof news.id === "string" ? Number.parseInt(news.id) : news.id),
+    )
+  }
+
+  const formatSelectedNewsForHTML = () => {
+    const selectedNewsData = getSelectedNewsData()
+    if (selectedNewsData.length === 0) {
+      return ""
+    }
+
+    const htmlDocument = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 주요 기사</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; margin: 20px; }
+        h1 { color: #1f2937; border-bottom: 2px solid #A0D3E8; padding-bottom: 10px; }
+        ol { padding-left: 20px; }
+        li { margin-bottom: 8px; }
+        a { color: #3b82f6; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .intro { background-color: #f1f5f9; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>오늘의 주요 기사</h1>
+    <div class="intro">
+        <p>안녕하십니까. 미래전략부문 대외협력팀 입니다.<br>
+        오늘의 주요 기사를 게시합니다.</p>
+    </div>
+    <ol>
+${selectedNewsData
+  .map((news, index) => {
+    const category = news.category && news.category !== "기타" ? `[${news.category}] ` : "[기타] "
+    return `        <li><a href="${news.url || news.link || "#"}">${category}${news.title}(${news.source})</a></li>`
+  })
+  .join("\n")}
+    </ol>
+</body>
+</html>`
+
+    return htmlDocument
+  }
+
+  const copyHTMLToClipboard = async () => {
+    const htmlContent = formatSelectedNewsForHTML()
+
+    if (!htmlContent) {
+      alert("선택된 뉴스가 없습니다.")
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(htmlContent)
+
+      const notification = document.createElement("div")
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; font-family: sans-serif;">
+          ✅ 완전한 HTML 문서가 클립보드에 복사되었습니다!
+        </div>
+      `
+      document.body.appendChild(notification)
+      setTimeout(() => document.body.removeChild(notification), 3000)
+
+      console.log("[v0] HTML 복사 완료:", htmlContent.substring(0, 200) + "...")
+    } catch (err) {
+      console.error("클립보드 복사 실패:", err)
+      alert("클립보드 복사에 실패했습니다.")
+    }
+  }
+
+  const copyToClipboard = () => {
+    const selectedNewsData = getSelectedNewsData()
+    if (selectedNewsData.length === 0) {
+      alert("선택된 뉴스가 없습니다.")
+      return
+    }
+
+    const formattedText = selectedNewsData
+      .map(
+        (news, index) =>
+          `${index + 1}. ${news.title} - ${news.source} (${new Date(news.publishedAt).toLocaleDateString("ko-KR")})`,
+      )
+      .join("\n")
+
+    navigator.clipboard.writeText(formattedText)
+    alert("선택된 뉴스가 텍스트 형식으로 클립보드에 복사되었습니다!")
+  }
 
   useEffect(() => {
-    if (selectedNews.length > 0) {
-      generateFormattedOutput()
-    } else {
-      setFormattedOutput("")
+    setNewsData([])
+  }, [])
+
+  const filteredNews = newsData.filter((news) => {
+    if (categoryFilter === "전체") {
+      return true
     }
-  }, [selectedNews])
+    return news.category === categoryFilter
+  })
+
+  const getUniqueCategories = () => {
+    const categories = newsData.map((news) => news.category)
+    return ["전체", ...Array.from(new Set(categories))]
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-6 py-4">
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl border animate-in fade-in-0 zoom-in-95 duration-300">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-primary" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-semibold text-card-foreground">뉴스 수집 완료!</h3>
+                <p className="text-sm text-muted">
+                  총 <span className="font-semibold text-primary">{collectedNewsCount}건</span>의 뉴스를 성공적으로
+                  수집했습니다.
+                </p>
+              </div>
+              <Button
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                확인
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <header className="bg-card border-b border-border shadow-sm">
+        <div className="container mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <Zap className="h-8 w-8 text-primary" />
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-primary to-chart-1 rounded-lg flex items-center justify-center">
+                  <Zap className="h-7 w-7 text-white" />
+                </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-foreground">GS E&R 뉴스 센터</h1>
-                  <p className="text-sm text-foreground/70">에너지 & 자원 뉴스 수집 및 관리 시스템</p>
+                  <h1 className="text-2xl font-bold text-card-foreground">GS E&R 뉴스 센터</h1>
+                  <p className="text-sm text-muted">에너지 & 자원 뉴스 수집 및 관리 시스템</p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm" onClick={refreshNews} disabled={isLoading}>
+            <div className="flex items-center space-x-3">
+              <Button
+                variant="outline"
+                onClick={refreshNews}
+                disabled={isLoading}
+                className="border-primary/20 text-primary hover:bg-primary/10 bg-transparent"
+              >
                 <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
                 {isLoading ? "수집 중..." : "24시간 뉴스 수집"}
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" className="border-border text-muted hover:bg-muted/10 bg-transparent">
                 <Settings className="h-4 w-4 mr-2" />
                 설정
               </Button>
@@ -268,173 +266,165 @@ export default function NewsManagementDashboard() {
         </div>
       </header>
 
-      <div className="container mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="container mx-auto px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Zap className="h-5 w-5 mr-2" />
-                    수집된 뉴스 목록
+            <Card className="bg-card shadow-sm border-border">
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm font-medium text-card-foreground">카테고리:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {getUniqueCategories().map((category) => (
+                      <Button
+                        key={category}
+                        variant={categoryFilter === category ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCategoryFilter(category)}
+                        className={
+                          categoryFilter === category
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                            : "border-border text-muted hover:bg-muted/10"
+                        }
+                      >
+                        {category}
+                      </Button>
+                    ))}
                   </div>
-                  <div className="text-sm text-foreground/60">
-                    총 {newsData.length}건 | {selectedNews.length}건 선택됨
-                  </div>
-                </CardTitle>
-                <CardDescription className="text-foreground/70">
-                  원하는 뉴스를 체크하여 선택하고, 우측에서 복사 가능한 형태로 출력하세요.
-                </CardDescription>
-              </CardHeader>
+                </div>
+              </CardContent>
             </Card>
 
-            <div className="space-y-4">
-              {newsData
-                .sort((a, b) => b.relevanceScore - a.relevanceScore)
-                .map((news) => (
-                  <Card
-                    key={news.id}
-                    className={`hover:shadow-md transition-all duration-200 py-0 ${selectedNews.includes(news.id) ? "ring-2 ring-primary/20 bg-primary/5" : ""}`}
-                  >
-                    <CardContent className="p-6 h-[94px] flex items-start my-0 py-6">
-                      <div className="flex items-start space-x-4 w-full">
-                        <div className="flex items-center justify-center w-6 h-6 mt-1">
-                          <Checkbox
-                            checked={selectedNews.includes(news.id)}
-                            onCheckedChange={(checked) => handleNewsSelection(news.id, checked as boolean)}
-                            className="w-5 h-5 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                          />
+            <div className="space-y-2">
+              {filteredNews.map((news) => (
+                <Card
+                  key={news.id}
+                  className="bg-card hover:shadow-md transition-all duration-200 cursor-pointer group border-border"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex items-center justify-center pt-1">
+                        <Checkbox
+                          checked={selectedNews.includes(
+                            typeof news.id === "string" ? Number.parseInt(news.id) : news.id,
+                          )}
+                          onCheckedChange={(checked) => {
+                            handleNewsSelection(news.id, checked as boolean)
+                          }}
+                          className="h-6 w-6 border-2 border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0" onClick={() => handleNewsClick(news.url)}>
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="font-semibold text-card-foreground text-xl leading-tight group-hover:text-primary transition-colors">
+                            {news.title}
+                          </h3>
+                          <Badge className="bg-accent text-accent-foreground text-base px-3 py-1 flex-shrink-0">
+                            {news.relevanceScore}%
+                          </Badge>
                         </div>
-                        <div className="flex-1 space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start space-x-2 flex-1">
-                              <h3
-                                className={`font-semibold leading-tight max-w-full ${
-                                  selectedNews.includes(news.id) ? "text-primary" : "text-foreground"
-                                } ${
-                                  news.title.length > 50 ? "text-sm" : news.title.length > 30 ? "text-base" : "text-lg"
-                                }`}
-                                style={{
-                                  display: "-webkit-box",
-                                  WebkitLineClamp: 2,
-                                  WebkitBoxOrient: "vertical",
-                                  overflow: "hidden",
-                                  wordBreak: "break-word",
-                                  lineHeight: "1.3",
-                                }}
-                              >
-                                {news.title}
-                              </h3>
-                              <a
-                                href={news.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:text-primary/80 mt-1 flex-shrink-0"
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                              </a>
-                            </div>
-                            <Badge variant="secondary" className="ml-2 flex-shrink-0">
-                              {news.relevanceScore}%
-                            </Badge>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4 text-xs text-foreground/60">
-                              <span className="flex items-center">
-                                <Globe className="h-3 w-3 mr-1" />
-                                {news.source && news.source !== "미분류" ? news.source : "언론사 정보 없음"}
-                              </span>
-                              <span className="flex items-center">
-                                <Calendar className="h-3 w-3 mr-1" />
-                                {new Date(news.publishedAt).toLocaleDateString("ko-KR")}
-                              </span>
-                            </div>
-                            <Badge variant="outline">{news.category}</Badge>
-                          </div>
+                        <div className="flex items-center space-x-3 text-base text-muted mt-2">
+                          <span className="flex items-center">
+                            <Globe className="h-5 w-5 mr-1" />
+                            {news.source}
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center">
+                            <Calendar className="h-5 w-5 mr-1" />
+                            {new Date(news.publishedAt).toLocaleDateString("ko-KR")}
+                          </span>
+                          <Badge variant="outline" className="border-border text-muted text-sm">
+                            {news.category}
+                          </Badge>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
 
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <TrendingUp className="h-5 w-5 mr-2" />
-                  선택된 뉴스 요약
-                </CardTitle>
-                <CardDescription className="text-foreground/70">
-                  선택한 뉴스를 탭으로 구분된 테이블 형식으로 정리합니다
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="text-sm text-foreground/60">
+            <Card className="bg-card shadow-sm border-border">
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-card-foreground">선택된 뉴스</h3>
+                    <Badge className="bg-primary text-primary-foreground">{selectedNews.length}개 선택</Badge>
+                  </div>
+
                   {selectedNews.length > 0 ? (
-                    <span>{selectedNews.length}건의 뉴스가 선택되었습니다</span>
+                    <>
+                      <div className="space-y-3">
+                        <div className="p-4 bg-muted/20 rounded-lg border border-border">
+                          <h4 className="text-sm font-medium mb-3 text-card-foreground flex items-center">
+                            <FileText className="h-4 w-4 mr-2" />
+                            HTML 미리보기:
+                          </h4>
+                          <div className="text-sm leading-relaxed text-card-foreground space-y-2">
+                            <div className="bg-primary/10 p-3 rounded border-l-4 border-primary">
+                              <p>
+                                안녕하십니까. 미래전략부문 대외협력팀 입니다.
+                                <br />
+                                오늘의 주요 기사를 게시합니다.
+                              </p>
+                            </div>
+                            <ol className="list-decimal list-inside space-y-1">
+                              {getSelectedNewsData().map((news, index) => {
+                                const category =
+                                  news.category && news.category !== "기타" ? `[${news.category}] ` : "[기타] "
+                                return (
+                                  <li key={news.id} className="text-primary hover:text-primary/80">
+                                    <a href={news.url || news.link || "#"} className="underline">
+                                      {category}
+                                      {news.title}({news.source})
+                                    </a>
+                                  </li>
+                                )
+                              })}
+                            </ol>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {getSelectedNewsData().map((news, index) => (
+                          <div key={news.id} className="p-3 bg-muted/10 rounded-lg border border-border">
+                            <div className="text-sm font-medium line-clamp-2 mb-1 text-card-foreground">
+                              {index + 1}. {news.title}
+                            </div>
+                            <div className="text-xs text-muted">
+                              {news.source} • {new Date(news.publishedAt).toLocaleDateString("ko-KR")}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Button
+                          onClick={copyHTMLToClipboard}
+                          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-base py-3"
+                        >
+                          <Copy className="h-5 w-5 mr-2" />
+                          완전한 HTML 문서로 복사
+                        </Button>
+                        <Button
+                          onClick={copyToClipboard}
+                          variant="outline"
+                          className="w-full border-border text-muted hover:bg-muted/10 bg-transparent"
+                        >
+                          텍스트로 복사
+                        </Button>
+                      </div>
+                    </>
                   ) : (
-                    <span>뉴스를 선택해주세요</span>
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-8 h-8 text-muted" />
+                      </div>
+                      <p className="text-muted text-sm">뉴스를 선택해주세요</p>
+                    </div>
                   )}
-                </div>
-
-                {formattedOutput && (
-                  <>
-                    <Separator />
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-2 block">
-                        포맷된 출력 (미래전략부문 대외협력팀 형식)
-                      </label>
-                      <ScrollArea className="h-96 w-full border rounded-md">
-                        <Textarea
-                          value={formattedOutput}
-                          readOnly
-                          className="min-h-96 resize-none border-0 focus:ring-0 text-sm leading-relaxed"
-                          placeholder="선택된 뉴스가 여기에 미래전략부문 대외협력팀 형식으로 표시됩니다..."
-                        />
-                      </ScrollArea>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button onClick={copyToClipboard} className="flex-1">
-                        <Copy className="h-4 w-4 mr-2" />
-                        클립보드에 복사
-                      </Button>
-                      <Button variant="outline">
-                        <Download className="h-4 w-4 mr-2" />
-                        다운로드
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">오늘의 통계</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-foreground/60">수집된 뉴스 (24시간)</span>
-                  <span className="font-semibold">{newsData.length}건</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-foreground/60">평균 관련도</span>
-                  <span className="font-semibold">
-                    {newsData.length > 0
-                      ? Math.round(newsData.reduce((sum, news) => sum + news.relevanceScore, 0) / newsData.length)
-                      : 0}
-                    %
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-foreground/60">활성 카테고리</span>
-                  <span className="font-semibold">{Object.keys(categoryStats).length}개</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-foreground/60">최신 업데이트</span>
-                  <span className="font-semibold text-xs">방금 전</span>
                 </div>
               </CardContent>
             </Card>
