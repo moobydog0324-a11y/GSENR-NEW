@@ -70,6 +70,8 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json(
         {
+          success: false,
+          data: [],
           error:
             "미소 API 설정이 필요합니다. Vercel 프로젝트 설정 > Environment Variables에서 MISO_ENDPOINT와 MISO_API_KEY를 설정해주세요.",
           details: {
@@ -161,7 +163,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    let newsData: NewsItem[] = []
+    const newsData: NewsItem[] = []
 
     if (finalOutputs) {
       console.log("[v0] 최종 outputs 처리 시작")
@@ -231,29 +233,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (newsData.length === 0) {
-      console.log("[v0] 실제 뉴스 데이터가 없어 Mock 데이터 사용")
-      newsData = [
-        {
-          id: Date.now() + 1,
-          title: "신재생에너지 보급 확산 정책 발표",
-          summary: "정부가 2024년 신재생에너지 보급 목표를 상향 조정했습니다.",
-          source: "에너지데일리",
-          publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          category: "재생에너지",
-          relevanceScore: 93,
-          url: "https://example.com/news/6",
+      console.log("[v0] 실제 뉴스 데이터가 없습니다. API 응답을 확인하세요.")
+      return NextResponse.json({
+        success: false,
+        data: [],
+        message: "뉴스 데이터를 수집하지 못했습니다. MISO API 응답을 확인해주세요.",
+        error: "NO_DATA_RECEIVED",
+        debug: {
+          environment: process.env.VERCEL_ENV || "preview",
+          responseLength: responseText.length,
+          linesProcessed: lines.length,
+          hasOutputs: !!finalOutputs,
+          rawResponse: responseText.substring(0, 1000) + "...",
         },
-        {
-          id: Date.now() + 2,
-          title: "LNG 터미널 확장 공사 착수",
-          summary: "인천 LNG 터미널 3호기 건설이 본격 시작되었습니다.",
-          source: "가스신문",
-          publishedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-          category: "LNG",
-          relevanceScore: 89,
-          url: "https://example.com/news/7",
-        },
-      ]
+      })
     }
 
     console.log("[v0] 최종 처리된 뉴스 데이터 개수:", newsData.length)
@@ -289,40 +282,23 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: false,
           data: [],
-          message: "요청 시간이 초과되었습니다. 미소 워크플로우 실행 시간이 초과되었습니다.",
+          message: "요청 시간이 초과되었습니다. MISO 워크플로우 실행 시간이 초과되었습니다.",
           error: "REQUEST_TIMEOUT",
         })
       }
     }
 
-    const mockData: NewsItem[] = [
-      {
-        id: Date.now() + 1,
-        title: "신재생에너지 보급 확산 정책 발표",
-        summary: "정부가 2024년 신재생에너지 보급 목표를 상향 조정했습니다.",
-        source: "에너지데일리",
-        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-        category: "재생에너지",
-        relevanceScore: 93,
-        url: "https://example.com/news/6",
-      },
-      {
-        id: Date.now() + 2,
-        title: "LNG 터미널 확장 공사 착수",
-        summary: "인천 LNG 터미널 3호기 건설이 본격 시작되었습니다.",
-        source: "가스신문",
-        publishedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-        category: "LNG",
-        relevanceScore: 89,
-        url: "https://example.com/news/7",
-      },
-    ]
-
     return NextResponse.json({
       success: false,
-      data: mockData,
-      message: "API 연결에 실패했습니다. Mock 데이터를 표시합니다.",
+      data: [],
+      message: "MISO API 호출에 실패했습니다. 환경 변수와 네트워크 연결을 확인해주세요.",
       error: error instanceof Error ? error.message : "알 수 없는 오류",
+      debug: {
+        environment: process.env.VERCEL_ENV || "preview",
+        endpoint: process.env.MISO_ENDPOINT ? "설정됨" : "미설정",
+        apiKey: process.env.MISO_API_KEY ? "설정됨" : "미설정",
+        errorType: error instanceof Error ? error.name : "Unknown",
+      },
     })
   }
 }
