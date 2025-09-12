@@ -56,28 +56,27 @@ export async function POST(request: NextRequest) {
     const misoEndpoint = process.env.MISO_ENDPOINT
     const misoApiKey = process.env.MISO_API_KEY
 
-    console.log("[v0] 미소 API 설정 확인:", {
+    console.log("[v0] 환경 변수 확인:", {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      VERCEL_URL: process.env.VERCEL_URL,
       endpoint: misoEndpoint ? "설정됨" : "미설정",
-      apiKey: misoApiKey ? "설정됨" : "미설정",
-      environment: process.env.NODE_ENV || "development",
-      vercelEnv: process.env.VERCEL_ENV || "preview",
+      apikey: misoApiKey ? "설정됨" : "미설정",
     })
 
     if (!misoEndpoint || !misoApiKey) {
-      console.error("[v0] 서버 환경 변수 누락:", {
-        MISO_ENDPOINT: misoEndpoint ? "설정됨" : "미설정",
-        MISO_API_KEY: misoApiKey ? "설정됨" : "미설정",
-      })
+      console.error("[v0] MISO API 환경 변수 누락")
       return NextResponse.json(
         {
           success: false,
           data: [],
-          error:
-            "미소 API 설정이 필요합니다. Vercel 프로젝트 설정 > Environment Variables에서 MISO_ENDPOINT와 MISO_API_KEY를 설정해주세요.",
+          error: "MISO API 환경 변수가 설정되지 않았습니다.",
           details: {
             endpoint: misoEndpoint ? "설정됨" : "미설정",
             apiKey: misoApiKey ? "설정됨" : "미설정",
-            guide: "Vercel 대시보드 > 프로젝트 > Settings > Environment Variables에서 설정하세요.",
+            environment: process.env.VERCEL_ENV || "development",
+            guide:
+              "Vercel 대시보드 > 프로젝트 > Settings > Environment Variables에서 MISO_ENDPOINT와 MISO_API_KEY를 설정하세요.",
           },
         },
         { status: 500 },
@@ -94,45 +93,122 @@ export async function POST(request: NextRequest) {
       user: "gs-er-news-system",
     }
 
-    console.log("[v0] 미소 API 요청 URL:", `${misoEndpoint}/workflows/run`)
-    console.log("[v0] 미소 API 요청 Body:", JSON.stringify(requestBody, null, 2))
+    console.log("[v0] MISO API 요청 시작:", {
+      url: `${misoEndpoint}/workflows/run`,
+      method: "POST",
+      hasAuth: !!misoApiKey,
+      bodySize: JSON.stringify(requestBody).length,
+    })
 
     const controller = new AbortController()
-    const timeoutDuration = process.env.VERCEL_ENV === "production" ? 600000 : 300000 // 프로덕션: 10분, 개발: 5분
-    const timeoutId = setTimeout(() => controller.abort(), timeoutDuration)
+    const timeoutDuration = 900000 // 15분으로 연장
+    const timeoutId = setTimeout(() => {
+      console.log("[v0] 요청 타임아웃 발생")
+      controller.abort()
+    }, timeoutDuration)
 
-    console.log(`[v0] 타임아웃 설정: ${timeoutDuration / 1000}초`)
+    let response: Response
+    let retryCount = 0
+    const maxRetries = 3
 
-    const response = await fetch(`${misoEndpoint}/workflows/run`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${misoApiKey}`,
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-        "Cache-Control": "no-cache",
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    })
+    while (retryCount < maxRetries) {
+      try {
+        console.log(`[v0] MISO API 호출 시도 ${retryCount + 1}/${maxRetries}`)
+
+        response = await fetch(`${misoEndpoint}/workflows/run`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${misoApiKey}`,
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+            "User-Agent": "GS-ER-News-Collector/1.0",
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        })
+
+        console.log(`[v0] 시도 ${retryCount + 1} 응답:`, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+        })
+
+        if (response.ok) {
+          break // 성공하면 루프 탈출
+        } else if (response.status >= 500 && retryCount < maxRetries - 1) {
+          // 서버 오류면 재시도
+          console.log(`[v0] 서버 오류 (${response.status}), 재시도 중...`)
+          retryCount++
+          await new Promise((resolve) => setTimeout(resolve, 2000 * retryCount)) // 지수 백오프
+          continue
+        } else {
+          // 클라이언트 오류면 즉시 실패
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+      } catch (fetchError) {
+        console.log(`[v0] 시도 ${retryCount + 1} 실패:`, fetchError)
+        if (retryCount === maxRetries - 1) {
+          throw fetchError
+        }
+        retryCount++
+        await new Promise((resolve) => setTimeout(resolve, 2000 * retryCount))
+      }
+    }
 
     clearTimeout(timeoutId)
 
-    console.log("[v0] 미소 API 응답 상태:", response.status)
-    console.log("[v0] 미소 API 응답 헤더:", Object.fromEntries(response.headers.entries()))
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.log("[v0] 미소 API 오류 응답:", errorText)
-      throw new Error(`미소 API 호출 실패: ${response.status} - ${errorText}`)
+    if (!response!.ok) {
+      const errorText = await response!.text()
+      console.error("[v0] MISO API 오류:", {
+        status: response!.status,
+        statusText: response!.statusText,
+        body: errorText,
+      })
+      throw new Error(`MISO API 호출 실패: ${response!.status} - ${errorText}`)
     }
 
-    const responseText = await response.text()
-    console.log("[v0] 미소 API 스트리밍 응답 수신 완료, 응답 길이:", responseText.length)
+    const reader = response!.body?.getReader()
+    if (!reader) {
+      throw new Error("응답 스트림을 읽을 수 없습니다")
+    }
+
+    let responseText = ""
+    let chunks = 0
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        chunks++
+        const chunk = new TextDecoder().decode(value)
+        responseText += chunk
+
+        if (chunks % 10 === 0) {
+          console.log(`[v0] 청크 ${chunks} 처리됨, 총 길이: ${responseText.length}`)
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    console.log("[v0] 스트리밍 완료:", {
+      totalChunks: chunks,
+      totalLength: responseText.length,
+      hasData: responseText.length > 0,
+    })
+
+    if (!responseText || responseText.length === 0) {
+      throw new Error("MISO API에서 빈 응답을 받았습니다")
+    }
 
     const lines = responseText.split("\n")
     let finalOutputs = null
+    let eventCount = 0
 
-    console.log("[v0] 스트리밍 응답 라인 수:", lines.length)
+    console.log(`[v0] 응답 라인 분석 시작: ${lines.length}개 라인`)
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim()
@@ -144,161 +220,173 @@ export async function POST(request: NextRequest) {
           }
 
           const eventData = JSON.parse(jsonStr)
-          console.log(`[v0] 라인 ${i}: 이벤트 처리:`, eventData.event)
+          eventCount++
 
-          if (eventData.event === "workflow_finished" && eventData.data && eventData.data.outputs) {
+          if (eventCount % 5 === 0) {
+            console.log(`[v0] 이벤트 ${eventCount} 처리: ${eventData.event}`)
+          }
+
+          if (eventData.event === "workflow_finished" && eventData.data?.outputs) {
             finalOutputs = eventData.data.outputs
-            console.log("[v0] 워크플로우 완료, 최종 outputs 추출")
+            console.log("[v0] 워크플로우 완료 - 최종 outputs 확보")
             break
           }
 
-          if (eventData.event === "iteration_completed" && eventData.data && eventData.data.outputs) {
+          if (eventData.event === "iteration_completed" && eventData.data?.outputs) {
             finalOutputs = eventData.data.outputs
-            console.log("[v0] 반복 완료, outputs 추출")
+            console.log("[v0] 반복 완료 - outputs 업데이트")
           }
         } catch (parseError) {
-          console.log(`[v0] 라인 ${i} 파싱 실패:`, parseError, "원본:", line)
+          // 파싱 오류는 조용히 넘어감 (너무 많은 로그 방지)
           continue
         }
       }
     }
 
+    console.log("[v0] 이벤트 처리 완료:", {
+      totalEvents: eventCount,
+      hasOutputs: !!finalOutputs,
+      outputKeys: finalOutputs ? Object.keys(finalOutputs) : [],
+    })
+
     const newsData: NewsItem[] = []
 
-    if (finalOutputs) {
-      console.log("[v0] 최종 outputs 처리 시작")
-      console.log("[v0] finalOutputs 구조:", Object.keys(finalOutputs))
+    if (finalOutputs?.output && Array.isArray(finalOutputs.output)) {
+      console.log(`[v0] 뉴스 데이터 처리 시작: ${finalOutputs.output.length}개 카테고리`)
 
-      if (finalOutputs.output && Array.isArray(finalOutputs.output)) {
-        console.log("[v0] outputs.output 배열 처리, 총", finalOutputs.output.length, "개 카테고리")
+      for (let categoryIndex = 0; categoryIndex < finalOutputs.output.length; categoryIndex++) {
+        const categoryData = finalOutputs.output[categoryIndex]
 
-        finalOutputs.output.forEach((categoryData: string, index: number) => {
-          try {
-            if (categoryData === "[]" || !categoryData || categoryData.trim() === "") {
-              console.log(`[v0] 카테고리 ${index}: 빈 데이터 스킵`)
-              return
-            }
-
-            console.log(`[v0] 카테고리 ${index} 원본 데이터:`, categoryData.substring(0, 200) + "...")
-
-            const newsArray = JSON.parse(categoryData)
-            if (Array.isArray(newsArray) && newsArray.length > 0) {
-              console.log(`[v0] 카테고리 ${index}: ${newsArray.length}개 뉴스 파싱`)
-
-              newsArray.forEach((newsItem: any, newsIndex: number) => {
-                try {
-                  const originalCategory = newsItem.id ? newsItem.id.split("-")[0] : "기타"
-                  const titleParts = newsItem.title.split(" - ")
-                  const source = titleParts.length > 1 ? titleParts[titleParts.length - 1] : "알 수 없음"
-                  const cleanTitle = titleParts.slice(0, -1).join(" - ")
-
-                  let publishedAt: string
-                  if (newsItem.pub_date) {
-                    try {
-                      publishedAt = new Date(newsItem.pub_date.replace(" ", "T") + ":00").toISOString()
-                    } catch {
-                      publishedAt = new Date().toISOString()
-                    }
-                  } else {
-                    publishedAt = new Date().toISOString()
-                  }
-
-                  const relevanceScore = calculateRelevanceScore(cleanTitle)
-
-                  newsData.push({
-                    id: Date.now() + Math.random(),
-                    title: cleanTitle,
-                    summary: `${originalCategory} 관련 뉴스입니다.`,
-                    source: source,
-                    publishedAt: publishedAt,
-                    category: categorizeNews(cleanTitle, originalCategory) || originalCategory,
-                    relevanceScore: relevanceScore,
-                    url: newsItem.link || newsItem.url || "#",
-                  })
-
-                  console.log(`[v0] 뉴스 ${newsIndex} 처리 완료: ${cleanTitle.substring(0, 50)}...`)
-                } catch (newsError) {
-                  console.log(`[v0] 뉴스 ${newsIndex} 처리 실패:`, newsError)
-                }
-              })
-            }
-          } catch (parseError) {
-            console.log(`[v0] 카테고리 ${index} 파싱 실패:`, parseError)
+        try {
+          if (!categoryData || categoryData === "[]" || categoryData.trim() === "") {
+            continue
           }
-        })
+
+          const newsArray = JSON.parse(categoryData)
+          if (!Array.isArray(newsArray) || newsArray.length === 0) {
+            continue
+          }
+
+          console.log(`[v0] 카테고리 ${categoryIndex}: ${newsArray.length}개 뉴스 처리`)
+
+          for (const newsItem of newsArray) {
+            try {
+              if (!newsItem.title || !newsItem.link) {
+                continue // 필수 필드 누락 시 스킵
+              }
+
+              const originalCategory = newsItem.id ? newsItem.id.split("-")[0] : "기타"
+              const titleParts = newsItem.title.split(" - ")
+              const source = titleParts.length > 1 ? titleParts[titleParts.length - 1] : "알 수 없음"
+              const cleanTitle = titleParts.slice(0, -1).join(" - ") || newsItem.title
+
+              let publishedAt: string
+              try {
+                if (newsItem.pub_date) {
+                  publishedAt = new Date(newsItem.pub_date.replace(" ", "T") + ":00").toISOString()
+                } else {
+                  publishedAt = new Date().toISOString()
+                }
+              } catch {
+                publishedAt = new Date().toISOString()
+              }
+
+              newsData.push({
+                id: Date.now() + Math.random(),
+                title: cleanTitle,
+                summary: `${originalCategory} 관련 뉴스입니다.`,
+                source: source,
+                publishedAt: publishedAt,
+                category: categorizeNews(cleanTitle, originalCategory),
+                relevanceScore: calculateRelevanceScore(cleanTitle),
+                url: newsItem.link || newsItem.url || "#",
+              })
+            } catch (newsError) {
+              console.log("[v0] 개별 뉴스 처리 실패:", newsError)
+              continue
+            }
+          }
+        } catch (categoryError) {
+          console.log(`[v0] 카테고리 ${categoryIndex} 처리 실패:`, categoryError)
+          continue
+        }
       }
-    } else {
-      console.log("[v0] finalOutputs가 null입니다. 전체 응답 재검토")
-      console.log("[v0] 응답 샘플:", responseText.substring(0, 500) + "...")
     }
 
-    if (newsData.length === 0) {
-      console.log("[v0] 실제 뉴스 데이터가 없습니다. API 응답을 확인하세요.")
-      return NextResponse.json({
-        success: false,
-        data: [],
-        message: "뉴스 데이터를 수집하지 못했습니다. MISO API 응답을 확인해주세요.",
-        error: "NO_DATA_RECEIVED",
-        debug: {
-          environment: process.env.VERCEL_ENV || "preview",
-          responseLength: responseText.length,
-          linesProcessed: lines.length,
-          hasOutputs: !!finalOutputs,
-          rawResponse: responseText.substring(0, 1000) + "...",
-        },
-      })
-    }
-
-    console.log("[v0] 최종 처리된 뉴스 데이터 개수:", newsData.length)
-    console.log(
-      "[v0] 카테고리별 분포:",
-      newsData.reduce(
+    console.log("[v0] 최종 뉴스 처리 결과:", {
+      totalNews: newsData.length,
+      categories: newsData.reduce(
         (acc, news) => {
           acc[news.category] = (acc[news.category] || 0) + 1
           return acc
         },
         {} as Record<string, number>,
       ),
-    )
+    })
+
+    if (newsData.length === 0) {
+      console.error("[v0] 뉴스 데이터 수집 실패 - 상세 디버그 정보")
+      return NextResponse.json({
+        success: false,
+        data: [],
+        message: "뉴스 데이터를 수집하지 못했습니다.",
+        error: "NO_NEWS_DATA",
+        debug: {
+          environment: process.env.VERCEL_ENV || "development",
+          responseLength: responseText.length,
+          eventCount: eventCount,
+          hasOutputs: !!finalOutputs,
+          outputStructure: finalOutputs ? Object.keys(finalOutputs) : [],
+          sampleResponse: responseText.substring(0, 500) + "...",
+        },
+      })
+    }
 
     return NextResponse.json({
       success: true,
       data: newsData,
-      message: `${newsData.length}건의 뉴스를 수집했습니다.`,
-      totalCategories: finalOutputs?.output ? finalOutputs.output.length : 0,
+      message: `${newsData.length}건의 뉴스를 성공적으로 수집했습니다.`,
       debug: {
-        environment: process.env.VERCEL_ENV || "preview",
-        responseLength: responseText.length,
-        linesProcessed: lines.length,
-        hasOutputs: !!finalOutputs,
+        environment: process.env.VERCEL_ENV || "development",
+        totalEvents: eventCount,
+        totalCategories: finalOutputs?.output?.length || 0,
+        retryCount: retryCount,
       },
     })
   } catch (error) {
-    console.error("[v0] 뉴스 수집 API 오류:", error)
+    console.error("[v0] MISO API 호출 최종 실패:", error)
+
+    let errorMessage = "알 수 없는 오류가 발생했습니다"
+    let errorCode = "UNKNOWN_ERROR"
 
     if (error instanceof Error) {
       if (error.name === "AbortError") {
-        console.log("[v0] 요청 타임아웃 발생")
-        return NextResponse.json({
-          success: false,
-          data: [],
-          message: "요청 시간이 초과되었습니다. MISO 워크플로우 실행 시간이 초과되었습니다.",
-          error: "REQUEST_TIMEOUT",
-        })
+        errorMessage = "요청 시간이 초과되었습니다 (15분)"
+        errorCode = "TIMEOUT"
+      } else if (error.message.includes("fetch")) {
+        errorMessage = "네트워크 연결에 실패했습니다"
+        errorCode = "NETWORK_ERROR"
+      } else {
+        errorMessage = error.message
+        errorCode = "API_ERROR"
       }
     }
 
-    return NextResponse.json({
-      success: false,
-      data: [],
-      message: "MISO API 호출에 실패했습니다. 환경 변수와 네트워크 연결을 확인해주세요.",
-      error: error instanceof Error ? error.message : "알 수 없는 오류",
-      debug: {
-        environment: process.env.VERCEL_ENV || "preview",
-        endpoint: process.env.MISO_ENDPOINT ? "설정됨" : "미설정",
-        apiKey: process.env.MISO_API_KEY ? "설정됨" : "미설정",
-        errorType: error instanceof Error ? error.name : "Unknown",
+    return NextResponse.json(
+      {
+        success: false,
+        data: [],
+        message: `MISO API 호출 실패: ${errorMessage}`,
+        error: errorCode,
+        debug: {
+          environment: process.env.VERCEL_ENV || "development",
+          endpoint: process.env.MISO_ENDPOINT ? "설정됨" : "미설정",
+          apiKey: process.env.MISO_API_KEY ? "설정됨" : "미설정",
+          errorType: error instanceof Error ? error.name : "Unknown",
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
       },
-    })
+      { status: 500 },
+    )
   }
 }
