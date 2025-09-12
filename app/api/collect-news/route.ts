@@ -11,12 +11,29 @@ interface NewsItem {
   url: string
 }
 
-const categorizeNews = (title: string): string => {
+const categorizeNews = (title: string, originalCategory?: string): string => {
+  // MISO API에서 제공하는 카테고리를 우선 사용
+  if (originalCategory && originalCategory !== "기타") {
+    return originalCategory
+  }
+
   const keywords = {
+    한전: ["한전", "한국전력", "KEPCO"],
+    SMR: ["SMR", "소형모듈원자로", "소형원자로"],
+    원전: ["원전", "원자력", "핵발전", "원자력발전소", "원자로"],
+    송전: ["송전", "송전선", "송전망", "전력망", "송배전"],
+    ESS: ["ESS", "에너지저장장치", "배터리", "저장시스템"],
+    정전: ["정전", "전력공급", "전기공급", "블랙아웃"],
+    전력망: ["전력망", "전력계통", "전력시스템", "그리드"],
+    열병합: ["열병합", "열병합발전", "CHP"],
+    풍력: ["풍력", "풍력발전", "해상풍력", "육상풍력"],
+    태양광: ["태양광", "태양광발전", "솔라", "PV"],
+    RE100: ["RE100", "재생에너지100", "재생에너지"],
+    수소: ["수소", "수소경제", "연료전지", "그린수소", "블루수소"],
+    암모니아: ["암모니아", "NH3", "암모니아연료"],
     LNG: ["LNG", "액화천연가스", "가스터미널"],
     재생에너지: ["재생에너지", "신재생", "태양광", "풍력", "수력"],
     석유화학: ["석유화학", "정유", "화학", "플라스틱"],
-    수소: ["수소", "수소경제", "연료전지"],
     원유: ["원유", "유가", "석유", "OPEC"],
   }
 
@@ -143,7 +160,7 @@ export async function POST(request: NextRequest) {
 
               newsArray.forEach((newsItem: any) => {
                 // 카테고리 추출 (id에서 추출)
-                const category = newsItem.id ? newsItem.id.split("-")[0] : "기타"
+                const originalCategory = newsItem.id ? newsItem.id.split("-")[0] : "기타"
 
                 // 언론사 추출 (제목에서 마지막 - 이후 부분)
                 const titleParts = newsItem.title.split(" - ")
@@ -168,10 +185,10 @@ export async function POST(request: NextRequest) {
                 newsData.push({
                   id: Date.now() + Math.random(), // 고유 ID 생성
                   title: cleanTitle,
-                  summary: `${category} 관련 뉴스입니다.`,
+                  summary: `${originalCategory} 관련 뉴스입니다.`,
                   source: source,
                   publishedAt: publishedAt,
-                  category: categorizeNews(cleanTitle) || category,
+                  category: categorizeNews(cleanTitle, originalCategory) || originalCategory,
                   relevanceScore: relevanceScore,
                   url: newsItem.link || newsItem.url || "#",
                 })
