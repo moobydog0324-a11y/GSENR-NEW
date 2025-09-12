@@ -62,7 +62,22 @@ export async function POST(request: NextRequest) {
     })
 
     if (!misoEndpoint || !misoApiKey) {
-      return NextResponse.json({ error: "미소 API 설정이 필요합니다. 환경변수를 확인해주세요." }, { status: 500 })
+      console.error("[v0] 서버 환경 변수 누락:", {
+        MISO_ENDPOINT: misoEndpoint ? "설정됨" : "미설정",
+        MISO_API_KEY: misoApiKey ? "설정됨" : "미설정",
+      })
+      return NextResponse.json(
+        {
+          error:
+            "미소 API 설정이 필요합니다. Vercel 프로젝트 설정 > Environment Variables에서 MISO_ENDPOINT와 MISO_API_KEY를 설정해주세요.",
+          details: {
+            endpoint: misoEndpoint ? "설정됨" : "미설정",
+            apiKey: misoApiKey ? "설정됨" : "미설정",
+            guide: "Vercel 대시보드 > 프로젝트 > Settings > Environment Variables에서 설정하세요.",
+          },
+        },
+        { status: 500 },
+      )
     }
 
     const misoInputs = {
@@ -71,13 +86,12 @@ export async function POST(request: NextRequest) {
 
     const requestBody = {
       inputs: misoInputs,
-      mode: "streaming", // blocking에서 streaming으로 변경하여 타임아웃 방지
+      mode: "streaming",
       user: "gs-er-news-system",
     }
 
     console.log("[v0] 미소 API 요청 URL:", `${misoEndpoint}/workflows/run`)
     console.log("[v0] 미소 API 요청 Body:", JSON.stringify(requestBody, null, 2))
-    console.log("[v0] 미소 API 입력 데이터:", misoInputs)
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 300000) // 5분 타임아웃
@@ -89,10 +103,10 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestBody),
-      signal: controller.signal, // 타임아웃 시그널 추가
+      signal: controller.signal,
     })
 
-    clearTimeout(timeoutId) // 성공 시 타임아웃 해제
+    clearTimeout(timeoutId)
 
     console.log("[v0] 미소 API 응답 상태:", response.status)
 
@@ -112,28 +126,24 @@ export async function POST(request: NextRequest) {
     console.log("[v0] 스트리밍 응답 라인 수:", lines.length)
 
     for (const line of lines) {
-      // "data:" 접두사가 있는 라인만 처리
       if (line.startsWith("data: ")) {
         try {
-          const jsonStr = line.substring(6) // "data: " 제거
+          const jsonStr = line.substring(6)
           const eventData = JSON.parse(jsonStr)
 
           console.log("[v0] 이벤트 처리:", eventData.event)
 
-          // workflow_finished 이벤트에서 최종 결과 추출
           if (eventData.event === "workflow_finished" && eventData.data && eventData.data.outputs) {
             finalOutputs = eventData.data.outputs
-            console.log("[v0] 워크플로우 완료, 최종 outputs 추출:", JSON.stringify(finalOutputs, null, 2))
+            console.log("[v0] 워크플로우 완료, 최종 outputs 추출")
             break
           }
 
-          // iteration_completed 이벤트에서도 결과 확인 (백업)
           if (eventData.event === "iteration_completed" && eventData.data && eventData.data.outputs) {
             finalOutputs = eventData.data.outputs
-            console.log("[v0] 반복 완료, outputs 추출:", JSON.stringify(finalOutputs, null, 2))
+            console.log("[v0] 반복 완료, outputs 추출")
           }
         } catch (parseError) {
-          // JSON 파싱 실패는 무시 (ping 이벤트 등)
           continue
         }
       }
@@ -149,7 +159,6 @@ export async function POST(request: NextRequest) {
 
         finalOutputs.output.forEach((categoryData: string, index: number) => {
           try {
-            // 빈 배열 문자열 스킵
             if (categoryData === "[]") {
               return
             }
@@ -159,15 +168,11 @@ export async function POST(request: NextRequest) {
               console.log(`[v0] 카테고리 ${index}: ${newsArray.length}개 뉴스 파싱`)
 
               newsArray.forEach((newsItem: any) => {
-                // 카테고리 추출 (id에서 추출)
                 const originalCategory = newsItem.id ? newsItem.id.split("-")[0] : "기타"
-
-                // 언론사 추출 (제목에서 마지막 - 이후 부분)
                 const titleParts = newsItem.title.split(" - ")
                 const source = titleParts.length > 1 ? titleParts[titleParts.length - 1] : "알 수 없음"
                 const cleanTitle = titleParts.slice(0, -1).join(" - ")
 
-                // 날짜 형식 변환
                 let publishedAt: string
                 if (newsItem.pub_date) {
                   try {
@@ -179,11 +184,10 @@ export async function POST(request: NextRequest) {
                   publishedAt = new Date().toISOString()
                 }
 
-                // 관련도 점수 계산
                 const relevanceScore = calculateRelevanceScore(cleanTitle)
 
                 newsData.push({
-                  id: Date.now() + Math.random(), // 고유 ID 생성
+                  id: Date.now() + Math.random(),
                   title: cleanTitle,
                   summary: `${originalCategory} 관련 뉴스입니다.`,
                   source: source,
@@ -201,7 +205,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 뉴스 데이터가 없으면 Mock 데이터 사용
     if (newsData.length === 0) {
       console.log("[v0] 실제 뉴스 데이터가 없어 Mock 데이터 사용")
       newsData = [
@@ -232,7 +235,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: newsData, // 이미 파싱된 NewsItem[] 배열
+      data: newsData,
       message: `${newsData.length}건의 뉴스를 수집했습니다.`,
       totalCategories: finalOutputs?.output ? finalOutputs.output.length : 0,
     })

@@ -252,12 +252,12 @@ ${selectedNewsData
                 variant="outline"
                 onClick={refreshNews}
                 disabled={isLoading}
-                className="border-primary/20 text-primary hover:bg-primary/10 bg-transparent"
+                className="border-primary/20 text-slate-700 hover:bg-primary/10 hover:text-primary bg-transparent font-medium"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
                 {isLoading ? "수집 중..." : "24시간 뉴스 수집"}
               </Button>
-              <Button variant="outline" className="border-border text-muted hover:bg-muted/10 bg-transparent">
+              <Button variant="outline" className="border-border text-slate-700 hover:bg-muted/10 bg-transparent">
                 <Settings className="h-4 w-4 mr-2" />
                 설정
               </Button>
