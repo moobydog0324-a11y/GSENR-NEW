@@ -172,11 +172,14 @@ export async function POST(request: NextRequest) {
     console.log("[v0] 블로킹 모드 응답 수신:", {
       hasData: !!responseData,
       dataKeys: responseData ? Object.keys(responseData) : [],
-      outputsExists: !!responseData?.outputs,
+      hasDataProperty: !!responseData?.data,
+      dataStructure: responseData?.data ? Object.keys(responseData.data) : [],
+      outputsExists: !!responseData?.data?.outputs,
+      directOutputsExists: !!responseData?.outputs, // 기존 방식도 확인
     })
 
     const newsData: NewsItem[] = []
-    const finalOutputs = responseData?.outputs
+    const finalOutputs = responseData?.data?.outputs || responseData?.outputs // fallback 포함
 
     if (finalOutputs?.output && Array.isArray(finalOutputs.output)) {
       console.log(`[v0] 뉴스 데이터 처리 시작: ${finalOutputs.output.length}개 카테고리`)
@@ -259,9 +262,11 @@ export async function POST(request: NextRequest) {
         message: "뉴스 데이터를 수집하지 못했습니다.",
         error: "NO_NEWS_DATA",
         debug: {
-          hasOutputs: !!finalOutputs,
+          hasData: !!responseData?.data,
+          hasDirectOutputs: !!responseData?.outputs,
+          hasNestedOutputs: !!responseData?.data?.outputs,
           outputStructure: finalOutputs ? Object.keys(finalOutputs) : [],
-          responseData: responseData,
+          fullResponse: responseData, // 전체 응답 구조 확인용
         },
       })
     }
