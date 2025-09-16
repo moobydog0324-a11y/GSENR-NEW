@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     const requestBody = {
       inputs: misoInputs,
-      mode: "streaming",
+      mode: "blocking",
       user: "gs-er-news-system",
     }
 
@@ -119,9 +119,8 @@ export async function POST(request: NextRequest) {
           headers: {
             Authorization: `Bearer ${misoApiKey}`,
             "Content-Type": "application/json",
-            Accept: "text/event-stream",
+            Accept: "application/json",
             "Cache-Control": "no-cache",
-            Connection: "keep-alive",
             "User-Agent": "GS-ER-News-Collector/1.0",
           },
           body: JSON.stringify(requestBody),
@@ -168,87 +167,16 @@ export async function POST(request: NextRequest) {
       throw new Error(`MISO API 호출 실패: ${response!.status} - ${errorText}`)
     }
 
-    const reader = response!.body?.getReader()
-    if (!reader) {
-      throw new Error("응답 스트림을 읽을 수 없습니다")
-    }
+    const responseData = await response!.json()
 
-    let responseText = ""
-    let chunks = 0
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        chunks++
-        const chunk = new TextDecoder().decode(value)
-        responseText += chunk
-
-        if (chunks % 10 === 0) {
-          console.log(`[v0] 청크 ${chunks} 처리됨, 총 길이: ${responseText.length}`)
-        }
-      }
-    } finally {
-      reader.releaseLock()
-    }
-
-    console.log("[v0] 스트리밍 완료:", {
-      totalChunks: chunks,
-      totalLength: responseText.length,
-      hasData: responseText.length > 0,
-    })
-
-    if (!responseText || responseText.length === 0) {
-      throw new Error("MISO API에서 빈 응답을 받았습니다")
-    }
-
-    const lines = responseText.split("\n")
-    let finalOutputs = null
-    let eventCount = 0
-
-    console.log(`[v0] 응답 라인 분석 시작: ${lines.length}개 라인`)
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim()
-      if (line.startsWith("data: ")) {
-        try {
-          const jsonStr = line.substring(6).trim()
-          if (jsonStr === "[DONE]" || jsonStr === "") {
-            continue
-          }
-
-          const eventData = JSON.parse(jsonStr)
-          eventCount++
-
-          if (eventCount % 5 === 0) {
-            console.log(`[v0] 이벤트 ${eventCount} 처리: ${eventData.event}`)
-          }
-
-          if (eventData.event === "workflow_finished" && eventData.data?.outputs) {
-            finalOutputs = eventData.data.outputs
-            console.log("[v0] 워크플로우 완료 - 최종 outputs 확보")
-            break
-          }
-
-          if (eventData.event === "iteration_completed" && eventData.data?.outputs) {
-            finalOutputs = eventData.data.outputs
-            console.log("[v0] 반복 완료 - outputs 업데이트")
-          }
-        } catch (parseError) {
-          // 파싱 오류는 조용히 넘어감 (너무 많은 로그 방지)
-          continue
-        }
-      }
-    }
-
-    console.log("[v0] 이벤트 처리 완료:", {
-      totalEvents: eventCount,
-      hasOutputs: !!finalOutputs,
-      outputKeys: finalOutputs ? Object.keys(finalOutputs) : [],
+    console.log("[v0] 블로킹 모드 응답 수신:", {
+      hasData: !!responseData,
+      dataKeys: responseData ? Object.keys(responseData) : [],
+      outputsExists: !!responseData?.outputs,
     })
 
     const newsData: NewsItem[] = []
+    const finalOutputs = responseData?.outputs
 
     if (finalOutputs?.output && Array.isArray(finalOutputs.output)) {
       console.log(`[v0] 뉴스 데이터 처리 시작: ${finalOutputs.output.length}개 카테고리`)
@@ -331,11 +259,9 @@ export async function POST(request: NextRequest) {
         message: "뉴스 데이터를 수집하지 못했습니다.",
         error: "NO_NEWS_DATA",
         debug: {
-          responseLength: responseText.length,
-          eventCount: eventCount,
           hasOutputs: !!finalOutputs,
           outputStructure: finalOutputs ? Object.keys(finalOutputs) : [],
-          sampleResponse: responseText.substring(0, 500) + "...",
+          responseData: responseData,
         },
       })
     }
@@ -345,7 +271,6 @@ export async function POST(request: NextRequest) {
       data: newsData,
       message: `${newsData.length}건의 뉴스를 성공적으로 수집했습니다.`,
       debug: {
-        totalEvents: eventCount,
         totalCategories: finalOutputs?.output?.length || 0,
         retryCount: retryCount,
       },
