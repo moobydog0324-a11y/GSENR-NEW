@@ -74,7 +74,6 @@ export async function POST(request: NextRequest) {
           details: {
             endpoint: misoEndpoint ? "설정됨" : "미설정",
             apiKey: misoApiKey ? "설정됨" : "미설정",
-            environment: process.env.VERCEL_ENV || "development",
             guide:
               "Vercel 대시보드 > 프로젝트 > Settings > Environment Variables에서 MISO_ENDPOINT와 MISO_API_KEY를 설정하세요.",
           },
@@ -89,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     const requestBody = {
       inputs: misoInputs,
-      mode: "blocking",
+      mode: "streaming",
       user: "gs-er-news-system",
     }
 
@@ -101,7 +100,7 @@ export async function POST(request: NextRequest) {
     })
 
     const controller = new AbortController()
-    const timeoutDuration = 900000 // 15분으로 연장
+    const timeoutDuration = 300000 // 5분으로 변경
     const timeoutId = setTimeout(() => {
       console.log("[v0] 요청 타임아웃 발생")
       controller.abort()
@@ -120,8 +119,9 @@ export async function POST(request: NextRequest) {
           headers: {
             Authorization: `Bearer ${misoApiKey}`,
             "Content-Type": "application/json",
-            Accept: "application/json",
+            Accept: "text/event-stream",
             "Cache-Control": "no-cache",
+            Connection: "keep-alive",
             "User-Agent": "GS-ER-News-Collector/1.0",
           },
           body: JSON.stringify(requestBody),
@@ -168,61 +168,93 @@ export async function POST(request: NextRequest) {
       throw new Error(`MISO API 호출 실패: ${response!.status} - ${errorText}`)
     }
 
-    const responseData = await response!.json()
+    const reader = response!.body?.getReader()
+    if (!reader) {
+      throw new Error("응답 스트림을 읽을 수 없습니다")
+    }
 
-    console.log("[v0] Blocking 모드 응답 수신:", {
-      hasData: !!responseData,
-      dataKeys: responseData ? Object.keys(responseData) : [],
-      dataType: typeof responseData,
+    let responseText = ""
+    let chunks = 0
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        chunks++
+        const chunk = new TextDecoder().decode(value)
+        responseText += chunk
+
+        if (chunks % 10 === 0) {
+          console.log(`[v0] 청크 ${chunks} 처리됨, 총 길이: ${responseText.length}`)
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    console.log("[v0] 스트리밍 완료:", {
+      totalChunks: chunks,
+      totalLength: responseText.length,
+      hasData: responseText.length > 0,
     })
 
-    if (!responseData) {
+    if (!responseText || responseText.length === 0) {
       throw new Error("MISO API에서 빈 응답을 받았습니다")
     }
 
+    const lines = responseText.split("\n")
     let finalOutputs = null
-    if (responseData.data && responseData.data.outputs) {
-      finalOutputs = responseData.data.outputs
-      console.log("[v0] outputs 발견:", Object.keys(finalOutputs))
-    } else if (responseData.outputs) {
-      finalOutputs = responseData.outputs
-      console.log("[v0] 직접 outputs 발견:", Object.keys(finalOutputs))
-    } else if (responseData.result) {
-      finalOutputs = { result: responseData.result }
-      console.log("[v0] result 키 발견")
-    } else {
-      console.log(
-        "[v0] outputs를 찾을 수 없음, 전체 응답 구조:",
-        JSON.stringify(responseData, null, 2).substring(0, 1000),
-      )
+    let eventCount = 0
+
+    console.log(`[v0] 응답 라인 분석 시작: ${lines.length}개 라인`)
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+      if (line.startsWith("data: ")) {
+        try {
+          const jsonStr = line.substring(6).trim()
+          if (jsonStr === "[DONE]" || jsonStr === "") {
+            continue
+          }
+
+          const eventData = JSON.parse(jsonStr)
+          eventCount++
+
+          if (eventCount % 5 === 0) {
+            console.log(`[v0] 이벤트 ${eventCount} 처리: ${eventData.event}`)
+          }
+
+          if (eventData.event === "workflow_finished" && eventData.data?.outputs) {
+            finalOutputs = eventData.data.outputs
+            console.log("[v0] 워크플로우 완료 - 최종 outputs 확보")
+            break
+          }
+
+          if (eventData.event === "iteration_completed" && eventData.data?.outputs) {
+            finalOutputs = eventData.data.outputs
+            console.log("[v0] 반복 완료 - outputs 업데이트")
+          }
+        } catch (parseError) {
+          // 파싱 오류는 조용히 넘어감 (너무 많은 로그 방지)
+          continue
+        }
+      }
     }
+
+    console.log("[v0] 이벤트 처리 완료:", {
+      totalEvents: eventCount,
+      hasOutputs: !!finalOutputs,
+      outputKeys: finalOutputs ? Object.keys(finalOutputs) : [],
+    })
 
     const newsData: NewsItem[] = []
 
-    let outputArray = null
-    if (finalOutputs) {
-      // 가능한 키들을 순서대로 확인
-      const possibleKeys = ["output", "result", "data", "news", "articles"]
-      for (const key of possibleKeys) {
-        if (finalOutputs[key] && Array.isArray(finalOutputs[key])) {
-          outputArray = finalOutputs[key]
-          console.log(`[v0] ${key} 키에서 배열 데이터 발견:`, outputArray.length)
-          break
-        }
-      }
+    if (finalOutputs?.output && Array.isArray(finalOutputs.output)) {
+      console.log(`[v0] 뉴스 데이터 처리 시작: ${finalOutputs.output.length}개 카테고리`)
 
-      // 키가 없으면 finalOutputs 자체가 배열인지 확인
-      if (!outputArray && Array.isArray(finalOutputs)) {
-        outputArray = finalOutputs
-        console.log("[v0] finalOutputs 자체가 배열:", outputArray.length)
-      }
-    }
-
-    if (outputArray && Array.isArray(outputArray)) {
-      console.log(`[v0] 뉴스 데이터 처리 시작: ${outputArray.length}개 카테고리`)
-
-      for (let categoryIndex = 0; categoryIndex < outputArray.length; categoryIndex++) {
-        const categoryData = outputArray[categoryIndex]
+      for (let categoryIndex = 0; categoryIndex < finalOutputs.output.length; categoryIndex++) {
+        const categoryData = finalOutputs.output[categoryIndex]
 
         try {
           if (!categoryData || categoryData === "[]" || categoryData.trim() === "") {
@@ -299,12 +331,11 @@ export async function POST(request: NextRequest) {
         message: "뉴스 데이터를 수집하지 못했습니다.",
         error: "NO_NEWS_DATA",
         debug: {
-          environment: process.env.VERCEL_ENV || "development",
-          responseLength: JSON.stringify(responseData).length,
-          retryCount: retryCount,
+          responseLength: responseText.length,
+          eventCount: eventCount,
           hasOutputs: !!finalOutputs,
           outputStructure: finalOutputs ? Object.keys(finalOutputs) : [],
-          sampleResponse: JSON.stringify(responseData).substring(0, 500) + "...",
+          sampleResponse: responseText.substring(0, 500) + "...",
         },
       })
     }
@@ -314,7 +345,8 @@ export async function POST(request: NextRequest) {
       data: newsData,
       message: `${newsData.length}건의 뉴스를 성공적으로 수집했습니다.`,
       debug: {
-        environment: process.env.VERCEL_ENV || "development",
+        totalEvents: eventCount,
+        totalCategories: finalOutputs?.output?.length || 0,
         retryCount: retryCount,
       },
     })
@@ -326,7 +358,7 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof Error) {
       if (error.name === "AbortError") {
-        errorMessage = "요청 시간이 초과되었습니다 (15분)"
+        errorMessage = "요청 시간이 초과되었습니다 (5분)"
         errorCode = "TIMEOUT"
       } else if (error.message.includes("fetch")) {
         errorMessage = "네트워크 연결에 실패했습니다"
@@ -344,7 +376,6 @@ export async function POST(request: NextRequest) {
         message: `MISO API 호출 실패: ${errorMessage}`,
         error: errorCode,
         debug: {
-          environment: process.env.VERCEL_ENV || "development",
           endpoint: process.env.MISO_ENDPOINT ? "설정됨" : "미설정",
           apiKey: process.env.MISO_API_KEY ? "설정됨" : "미설정",
           errorType: error instanceof Error ? error.name : "Unknown",
