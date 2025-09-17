@@ -90,12 +90,14 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] 미소 API 블록킹 응답 수신 완료") // 로그 메시지 업데이트
 
+    const responseText = await response.text()
+
     let apiResponse
     try {
-      apiResponse = JSON.parse(await response.text())
+      apiResponse = JSON.parse(responseText)
       console.log("[v0] 블록킹 응답 파싱 성공:", JSON.stringify(apiResponse, null, 2))
     } catch (parseError) {
-      console.log("[v0] JSON 파싱 실패, 원본 응답:", (await response.text()).substring(0, 200))
+      console.log("[v0] JSON 파싱 실패, 원본 응답:", responseText.substring(0, 200))
       throw new Error("API 응답을 파싱할 수 없습니다")
     }
 

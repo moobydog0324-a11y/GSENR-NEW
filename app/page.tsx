@@ -47,10 +47,32 @@ export default function NewsManagementDashboard() {
 
       if (result.success) {
         console.log(`[v0] ${result.message}`)
-        return result.data
+        const transformedData = result.data.map((item: any, index: number) => ({
+          id: index + 1,
+          title: item.title || "제목 없음",
+          source: item.press || item.source || "출처 없음",
+          publishedAt: item.pub_date || item.publishedAt || new Date().toISOString(),
+          category: item.category || "기타",
+          relevanceScore: Math.floor(Math.random() * 30) + 70, // 70-99 사이 랜덤 점수
+          url: item.link || item.url || "#",
+          link: item.link || item.url || "#",
+          pub_date: item.pub_date || item.publishedAt,
+        }))
+        return transformedData
       } else {
         console.warn(`[v0] ${result.message}`)
-        return result.data
+        const transformedData = (result.data || []).map((item: any, index: number) => ({
+          id: index + 1,
+          title: item.title || "제목 없음",
+          source: item.press || item.source || "출처 없음",
+          publishedAt: item.pub_date || item.publishedAt || new Date().toISOString(),
+          category: item.category || "기타",
+          relevanceScore: Math.floor(Math.random() * 30) + 70,
+          url: item.link || item.url || "#",
+          link: item.link || item.url || "#",
+          pub_date: item.pub_date || item.publishedAt,
+        }))
+        return transformedData
       }
     } catch (error) {
       console.error("[v0] 뉴스 수집 API 호출 오류:", error)
