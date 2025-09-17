@@ -51,6 +51,68 @@ const calculateRelevanceScore = (title: string): number => {
   return Math.min(70 + matches * 10, 100)
 }
 
+const parseMarkdownNews = (markdownText: string): NewsItem[] => {
+  const newsItems: NewsItem[] = []
+
+  // 마크다운에서 뉴스 항목들을 추출 (일반적인 패턴들)
+  const patterns = [
+    // 패턴 1: ## 제목 형태
+    /##\s*(.+?)(?:\n|$)/g,
+    // 패턴 2: ### 제목 형태
+    /###\s*(.+?)(?:\n|$)/g,
+    // 패턴 3: - [제목](링크) 형태
+    /-\s*\[(.+?)\]$$(.+?)$$/g,
+    // 패턴 4: * 제목 - 언론사 형태
+    /\*\s*(.+?)\s*-\s*(.+?)(?:\n|$)/g,
+    // 패턴 5: 1. 제목 형태
+    /\d+\.\s*(.+?)(?:\n|$)/g,
+  ]
+
+  let itemCount = 0
+
+  // 각 패턴으로 뉴스 항목 추출
+  patterns.forEach((pattern, patternIndex) => {
+    let match
+    while ((match = pattern.exec(markdownText)) !== null && itemCount < 100) {
+      let title = match[1]?.trim()
+      const url = match[2]?.trim() || "#"
+      let source = "알 수 없음"
+
+      if (!title) continue
+
+      // 제목에서 언론사 추출 (마지막 - 이후 부분)
+      const titleParts = title.split(" - ")
+      if (titleParts.length > 1) {
+        source = titleParts[titleParts.length - 1].trim()
+        title = titleParts.slice(0, -1).join(" - ").trim()
+      }
+
+      // 중복 제거 (같은 제목이 이미 있으면 스킵)
+      if (newsItems.some((item) => item.title === title)) {
+        continue
+      }
+
+      const category = categorizeNews(title)
+      const relevanceScore = calculateRelevanceScore(title)
+
+      newsItems.push({
+        id: Date.now() + itemCount,
+        title: title,
+        summary: `${category} 관련 뉴스입니다.`,
+        source: source,
+        publishedAt: new Date(Date.now() - itemCount * 60 * 1000).toISOString(), // 시간차 두기
+        category: category,
+        relevanceScore: relevanceScore,
+        url: url,
+      })
+
+      itemCount++
+    }
+  })
+
+  return newsItems
+}
+
 export async function POST(request: NextRequest) {
   try {
     const misoEndpoint = process.env.MISO_ENDPOINT
@@ -124,71 +186,77 @@ export async function POST(request: NextRequest) {
 
     if (outputs) {
       console.log("[v0] outputs 타입:", typeof outputs)
-      console.log("[v0] outputs 키들:", Object.keys(outputs))
 
-      if (outputs.output) {
-        console.log("[v0] outputs.output 타입:", typeof outputs.output)
-        console.log("[v0] outputs.output 배열 여부:", Array.isArray(outputs.output))
-        if (Array.isArray(outputs.output)) {
-          console.log("[v0] outputs.output 길이:", outputs.output.length)
-          console.log("[v0] outputs.output 첫 번째 항목 미리보기:", outputs.output[0]?.substring(0, 100))
-        }
-      }
+      if (typeof outputs === "string") {
+        console.log("[v0] outputs가 문자열(마크다운) 형태입니다")
+        console.log("[v0] 마크다운 내용 미리보기:", outputs.substring(0, 300))
 
-      if (outputs.output && Array.isArray(outputs.output)) {
-        console.log("[v0] outputs.output 배열 처리, 총", outputs.output.length, "개 카테고리")
+        newsData = parseMarkdownNews(outputs)
+        console.log("[v0] 마크다운에서 파싱된 뉴스 개수:", newsData.length)
+      } else if (outputs.result && typeof outputs.result === "string") {
+        console.log("[v0] outputs.result가 문자열(마크다운) 형태입니다")
+        console.log("[v0] 마크다운 내용 미리보기:", outputs.result.substring(0, 300))
 
-        outputs.output.forEach((categoryData: string, index: number) => {
-          try {
-            // 빈 배열 문자열 스킵
-            if (categoryData === "[]") {
-              return
-            }
+        newsData = parseMarkdownNews(outputs.result)
+        console.log("[v0] 마크다운에서 파싱된 뉴스 개수:", newsData.length)
+      } else {
+        console.log("[v0] outputs 키들:", Object.keys(outputs))
 
-            const newsArray = JSON.parse(categoryData)
-            if (Array.isArray(newsArray) && newsArray.length > 0) {
-              console.log(`[v0] 카테고리 ${index}: ${newsArray.length}개 뉴스 파싱`)
+        if (outputs.output && Array.isArray(outputs.output)) {
+          console.log("[v0] outputs.output 배열 처리, 총", outputs.output.length, "개 카테고리")
 
-              newsArray.forEach((newsItem: any) => {
-                // 카테고리 추출 (id에서 추출)
-                const originalCategory = newsItem.id ? newsItem.id.split("-")[0] : "기타"
+          outputs.output.forEach((categoryData: string, index: number) => {
+            try {
+              // 빈 배열 문자열 스킵
+              if (categoryData === "[]") {
+                return
+              }
 
-                // 언론사 추출 (제목에서 마지막 - 이후 부분)
-                const titleParts = newsItem.title.split(" - ")
-                const source = titleParts.length > 1 ? titleParts[titleParts.length - 1] : "알 수 없음"
-                const cleanTitle = titleParts.slice(0, -1).join(" - ")
+              const newsArray = JSON.parse(categoryData)
+              if (Array.isArray(newsArray) && newsArray.length > 0) {
+                console.log(`[v0] 카테고리 ${index}: ${newsArray.length}개 뉴스 파싱`)
 
-                // 날짜 형식 변환
-                let publishedAt: string
-                if (newsItem.pub_date) {
-                  try {
-                    publishedAt = new Date(newsItem.pub_date.replace(" ", "T") + ":00").toISOString()
-                  } catch {
+                newsArray.forEach((newsItem: any) => {
+                  // 카테고리 추출 (id에서 추출)
+                  const originalCategory = newsItem.id ? newsItem.id.split("-")[0] : "기타"
+
+                  // 언론사 추출 (제목에서 마지막 - 이후 부분)
+                  const titleParts = newsItem.title.split(" - ")
+                  const source = titleParts.length > 1 ? titleParts[titleParts.length - 1] : "알 수 없음"
+                  const cleanTitle = titleParts.slice(0, -1).join(" - ")
+
+                  // 날짜 형식 변환
+                  let publishedAt: string
+                  if (newsItem.pub_date) {
+                    try {
+                      publishedAt = new Date(newsItem.pub_date.replace(" ", "T") + ":00").toISOString()
+                    } catch {
+                      publishedAt = new Date().toISOString()
+                    }
+                  } else {
                     publishedAt = new Date().toISOString()
                   }
-                } else {
-                  publishedAt = new Date().toISOString()
-                }
 
-                // 관련도 점수 계산
-                const relevanceScore = calculateRelevanceScore(cleanTitle)
+                  // 관련도 점수 계산
+                  const relevanceScore = calculateRelevanceScore(cleanTitle)
 
-                newsData.push({
-                  id: Date.now() + Math.random(), // 고유 ID 생성
-                  title: cleanTitle,
-                  summary: `${originalCategory} 관련 뉴스입니다.`,
-                  source: source,
-                  publishedAt: publishedAt,
-                  category: categorizeNews(cleanTitle, originalCategory) || originalCategory,
-                  relevanceScore: relevanceScore,
-                  url: newsItem.link || newsItem.url || "#",
+                  newsData.push({
+                    id: Date.now() + Math.random(), // 고유 ID 생성
+                    title: cleanTitle,
+                    summary: `${originalCategory} 관련 뉴스입니다.`,
+                    source: source,
+                    publishedAt: publishedAt,
+                    category: categorizeNews(cleanTitle, originalCategory) || originalCategory,
+                    relevanceScore: relevanceScore,
+                    url: newsItem.link || newsItem.url || "#",
+                  })
                 })
-              })
+              }
+            } catch (parseError) {
+              console.log(`[v0] 카테고리 ${index} 파싱 실패:`, parseError)
             }
-          } catch (parseError) {
-            console.log(`[v0] 카테고리 ${index} 파싱 실패:`, parseError)
-          }
-        })
+          })
+        }
       }
     }
 
