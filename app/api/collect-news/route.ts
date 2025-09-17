@@ -189,8 +189,65 @@ export async function POST(request: NextRequest) {
     const newsData: NewsItem[] = []
     const finalOutputs = responseData?.data?.outputs || responseData?.outputs // fallback 포함
 
-    if (finalOutputs?.output && Array.isArray(finalOutputs.output)) {
-      console.log(`[v0] 뉴스 데이터 처리 시작: ${finalOutputs.output.length}개 카테고리`)
+    if (finalOutputs?.result) {
+      console.log(`[v0] result 키에서 뉴스 데이터 처리 시작`)
+
+      try {
+        // result가 문자열인 경우 JSON 파싱
+        const resultData =
+          typeof finalOutputs.result === "string" ? JSON.parse(finalOutputs.result) : finalOutputs.result
+
+        console.log(`[v0] result 데이터 구조:`, {
+          type: typeof resultData,
+          isArray: Array.isArray(resultData),
+          keys: typeof resultData === "object" ? Object.keys(resultData) : [],
+          length: Array.isArray(resultData) ? resultData.length : "N/A",
+        })
+
+        // result가 배열인 경우 직접 처리
+        if (Array.isArray(resultData)) {
+          for (const newsItem of resultData) {
+            try {
+              if (!newsItem.제목 && !newsItem.title) {
+                continue // 필수 필드 누락 시 스킵
+              }
+
+              const title = newsItem.제목 || newsItem.title || ""
+              const url = newsItem.URL || newsItem.url || newsItem.link || "#"
+              const category = newsItem.카테고리 || newsItem.category || "기타"
+              const date = newsItem.날짜 || newsItem.date || newsItem.pub_date || new Date().toISOString()
+              const source = newsItem.언론사 || newsItem.source || "알 수 없음"
+
+              let publishedAt: string
+              try {
+                publishedAt = new Date(date).toISOString()
+              } catch {
+                publishedAt = new Date().toISOString()
+              }
+
+              newsData.push({
+                id: Date.now() + Math.random(),
+                title: title,
+                summary: `${category} 관련 뉴스입니다.`,
+                source: source,
+                publishedAt: publishedAt,
+                category: categorizeNews(title, category),
+                relevanceScore: calculateRelevanceScore(title),
+                url: url,
+              })
+            } catch (newsError) {
+              console.log("[v0] 개별 뉴스 처리 실패:", newsError)
+              continue
+            }
+          }
+        }
+      } catch (parseError) {
+        console.log("[v0] result 데이터 파싱 실패:", parseError)
+      }
+    }
+    // 기존 output 키 처리도 유지 (fallback)
+    else if (finalOutputs?.output && Array.isArray(finalOutputs.output)) {
+      console.log(`[v0] 기존 output 키에서 뉴스 데이터 처리 시작: ${finalOutputs.output.length}개 카테고리`)
 
       for (let categoryIndex = 0; categoryIndex < finalOutputs.output.length; categoryIndex++) {
         const categoryData = finalOutputs.output[categoryIndex]
@@ -274,6 +331,8 @@ export async function POST(request: NextRequest) {
           hasDirectOutputs: !!responseData?.outputs,
           hasNestedOutputs: !!responseData?.data?.outputs,
           outputStructure: finalOutputs ? Object.keys(finalOutputs) : [],
+          hasResult: !!finalOutputs?.result,
+          resultType: finalOutputs?.result ? typeof finalOutputs.result : "undefined",
           fullResponse: responseData, // 전체 응답 구조 확인용
         },
       })
