@@ -88,14 +88,30 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(requestBody),
     })
 
-    console.log("[v0] 미소 API 블록킹 응답 수신 완료") // 로그 메시지 업데이트
+    console.log("[v0] 미소 API 응답 상태:", response.status, response.statusText)
 
     const responseText = await response.text()
+    console.log("[v0] 미소 API 원본 응답 길이:", responseText.length)
+    console.log("[v0] 미소 API 원본 응답 미리보기:", responseText.substring(0, 500))
 
     let apiResponse
     try {
       apiResponse = JSON.parse(responseText)
-      console.log("[v0] 블록킹 응답 파싱 성공:", JSON.stringify(apiResponse, null, 2))
+      console.log("[v0] JSON 파싱 성공")
+      console.log("[v0] 응답 최상위 키들:", Object.keys(apiResponse))
+
+      if (apiResponse.data) {
+        console.log("[v0] apiResponse.data 키들:", Object.keys(apiResponse.data))
+        if (apiResponse.data.outputs) {
+          console.log("[v0] apiResponse.data.outputs 키들:", Object.keys(apiResponse.data.outputs))
+        }
+      }
+      if (apiResponse.result) {
+        console.log("[v0] apiResponse.result 키들:", Object.keys(apiResponse.result))
+      }
+      if (apiResponse.outputs) {
+        console.log("[v0] apiResponse.outputs 키들:", Object.keys(apiResponse.outputs))
+      }
     } catch (parseError) {
       console.log("[v0] JSON 파싱 실패, 원본 응답:", responseText.substring(0, 200))
       throw new Error("API 응답을 파싱할 수 없습니다")
@@ -104,9 +120,20 @@ export async function POST(request: NextRequest) {
     let newsData: NewsItem[] = []
 
     const outputs = apiResponse.data?.outputs || apiResponse.result || apiResponse.outputs
+    console.log("[v0] 최종 선택된 outputs:", outputs ? "존재함" : "없음")
 
     if (outputs) {
-      console.log("[v0] 블록킹 모드 outputs 처리 시작")
+      console.log("[v0] outputs 타입:", typeof outputs)
+      console.log("[v0] outputs 키들:", Object.keys(outputs))
+
+      if (outputs.output) {
+        console.log("[v0] outputs.output 타입:", typeof outputs.output)
+        console.log("[v0] outputs.output 배열 여부:", Array.isArray(outputs.output))
+        if (Array.isArray(outputs.output)) {
+          console.log("[v0] outputs.output 길이:", outputs.output.length)
+          console.log("[v0] outputs.output 첫 번째 항목 미리보기:", outputs.output[0]?.substring(0, 100))
+        }
+      }
 
       if (outputs.output && Array.isArray(outputs.output)) {
         console.log("[v0] outputs.output 배열 처리, 총", outputs.output.length, "개 카테고리")
@@ -177,7 +204,7 @@ export async function POST(request: NextRequest) {
           publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
           category: "재생에너지",
           relevanceScore: 93,
-          url: "https://example.com/news/6",
+          url: "#",
         },
         {
           id: Date.now() + 2,
@@ -187,7 +214,7 @@ export async function POST(request: NextRequest) {
           publishedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
           category: "LNG",
           relevanceScore: 89,
-          url: "https://example.com/news/7",
+          url: "#",
         },
       ]
     }
@@ -212,7 +239,7 @@ export async function POST(request: NextRequest) {
         publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
         category: "재생에너지",
         relevanceScore: 93,
-        url: "https://example.com/news/6",
+        url: "#",
       },
       {
         id: Date.now() + 2,
@@ -222,7 +249,7 @@ export async function POST(request: NextRequest) {
         publishedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
         category: "LNG",
         relevanceScore: 89,
-        url: "https://example.com/news/7",
+        url: "#",
       },
     ]
 
