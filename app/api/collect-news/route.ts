@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     })
 
     const controller = new AbortController()
-    const timeoutDuration = 300000 // 5분으로 변경
+    const timeoutDuration = 600000 // 10분으로 변경
     const timeoutId = setTimeout(() => {
       console.log("[v0] 요청 타임아웃 발생")
       controller.abort()
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 
     let response: Response
     let retryCount = 0
-    const maxRetries = 3
+    const maxRetries = 5
 
     while (retryCount < maxRetries) {
       try {
@@ -133,13 +133,21 @@ export async function POST(request: NextRequest) {
           headers: Object.fromEntries(response.headers.entries()),
         })
 
-        if (response.ok) {
-          break // 성공하면 루프 탈출
+        const contentType = response.headers.get("content-type")
+        console.log(`[v0] Content-Type: ${contentType}`)
+
+        if (response.ok && contentType?.includes("application/json")) {
+          break // JSON 응답이면 성공
+        } else if (response.ok && !contentType?.includes("application/json")) {
+          // 200이지만 HTML 응답인 경우
+          const responseText = await response.text()
+          console.log(`[v0] HTML 응답 감지 (재시도 필요):`, responseText.substring(0, 200))
+          throw new Error(`HTML 응답 수신: ${responseText.substring(0, 100)}`)
         } else if (response.status >= 500 && retryCount < maxRetries - 1) {
           // 서버 오류면 재시도
           console.log(`[v0] 서버 오류 (${response.status}), 재시도 중...`)
           retryCount++
-          await new Promise((resolve) => setTimeout(resolve, 2000 * retryCount)) // 지수 백오프
+          await new Promise((resolve) => setTimeout(resolve, 5000 * retryCount)) // 5초씩 증가
           continue
         } else {
           // 클라이언트 오류면 즉시 실패
@@ -151,20 +159,20 @@ export async function POST(request: NextRequest) {
           throw fetchError
         }
         retryCount++
-        await new Promise((resolve) => setTimeout(resolve, 2000 * retryCount))
+        await new Promise((resolve) => setTimeout(resolve, 5000 * retryCount))
       }
     }
 
     clearTimeout(timeoutId)
 
-    if (!response!.ok) {
-      const errorText = await response!.text()
-      console.error("[v0] MISO API 오류:", {
-        status: response!.status,
-        statusText: response!.statusText,
-        body: errorText,
+    const contentType = response!.headers.get("content-type")
+    if (!contentType?.includes("application/json")) {
+      const responseText = await response!.text()
+      console.error("[v0] 비JSON 응답 수신:", {
+        contentType,
+        responsePreview: responseText.substring(0, 500),
       })
-      throw new Error(`MISO API 호출 실패: ${response!.status} - ${errorText}`)
+      throw new Error(`예상치 못한 응답 형식: ${contentType}`)
     }
 
     const responseData = await response!.json()
@@ -288,7 +296,7 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof Error) {
       if (error.name === "AbortError") {
-        errorMessage = "요청 시간이 초과되었습니다 (5분)"
+        errorMessage = "요청 시간이 초과되었습니다 (10분)"
         errorCode = "TIMEOUT"
       } else if (error.message.includes("fetch")) {
         errorMessage = "네트워크 연결에 실패했습니다"
