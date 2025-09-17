@@ -99,19 +99,6 @@ export async function POST(request: NextRequest) {
       apiResponse = JSON.parse(responseText)
       console.log("[v0] JSON 파싱 성공")
       console.log("[v0] 응답 최상위 키들:", Object.keys(apiResponse))
-
-      if (apiResponse.data) {
-        console.log("[v0] apiResponse.data 키들:", Object.keys(apiResponse.data))
-        if (apiResponse.data.outputs) {
-          console.log("[v0] apiResponse.data.outputs 키들:", Object.keys(apiResponse.data.outputs))
-        }
-      }
-      if (apiResponse.result) {
-        console.log("[v0] apiResponse.result 키들:", Object.keys(apiResponse.result))
-      }
-      if (apiResponse.outputs) {
-        console.log("[v0] apiResponse.outputs 키들:", Object.keys(apiResponse.outputs))
-      }
     } catch (parseError) {
       console.log("[v0] JSON 파싱 실패, 원본 응답:", responseText.substring(0, 200))
       throw new Error("API 응답을 파싱할 수 없습니다")
@@ -119,76 +106,67 @@ export async function POST(request: NextRequest) {
 
     let newsData: NewsItem[] = []
 
-    const outputs = apiResponse.data?.outputs || apiResponse.result || apiResponse.outputs
-    console.log("[v0] 최종 선택된 outputs:", outputs ? "존재함" : "없음")
+    if (apiResponse.result) {
+      console.log("[v0] result 필드 발견, 타입:", typeof apiResponse.result)
 
-    if (outputs) {
-      console.log("[v0] outputs 타입:", typeof outputs)
-      console.log("[v0] outputs 키들:", Object.keys(outputs))
+      try {
+        // result가 문자열 형태의 JSON 코드 블록인 경우 처리
+        let resultData = apiResponse.result
 
-      if (outputs.output) {
-        console.log("[v0] outputs.output 타입:", typeof outputs.output)
-        console.log("[v0] outputs.output 배열 여부:", Array.isArray(outputs.output))
-        if (Array.isArray(outputs.output)) {
-          console.log("[v0] outputs.output 길이:", outputs.output.length)
-          console.log("[v0] outputs.output 첫 번째 항목 미리보기:", outputs.output[0]?.substring(0, 100))
+        // \`\`\`json으로 감싸진 경우 추출
+        if (typeof resultData === "string" && resultData.includes("```json")) {
+          const jsonMatch = resultData.match(/```json\n([\s\S]*?)\n```/)
+          if (jsonMatch && jsonMatch[1]) {
+            resultData = JSON.parse(jsonMatch[1])
+            console.log("[v0] JSON 코드 블록에서 데이터 추출 성공")
+          }
         }
-      }
 
-      if (outputs.output && Array.isArray(outputs.output)) {
-        console.log("[v0] outputs.output 배열 처리, 총", outputs.output.length, "개 카테고리")
+        // news_briefing 배열 처리
+        if (resultData.news_briefing && Array.isArray(resultData.news_briefing)) {
+          console.log("[v0] news_briefing 배열 발견, 총", resultData.news_briefing.length, "개 뉴스")
 
-        outputs.output.forEach((categoryData: string, index: number) => {
-          try {
-            // 빈 배열 문자열 스킵
-            if (categoryData === "[]") {
-              return
-            }
+          resultData.news_briefing.forEach((newsItem: any, index: number) => {
+            try {
+              // 카테고리에서 대괄호 제거
+              const cleanCategory = newsItem.category ? newsItem.category.replace(/[[\]]/g, "") : "기타"
 
-            const newsArray = JSON.parse(categoryData)
-            if (Array.isArray(newsArray) && newsArray.length > 0) {
-              console.log(`[v0] 카테고리 ${index}: ${newsArray.length}개 뉴스 파싱`)
-
-              newsArray.forEach((newsItem: any) => {
-                // 카테고리 추출 (id에서 추출)
-                const originalCategory = newsItem.id ? newsItem.id.split("-")[0] : "기타"
-
-                // 언론사 추출 (제목에서 마지막 - 이후 부분)
-                const titleParts = newsItem.title.split(" - ")
-                const source = titleParts.length > 1 ? titleParts[titleParts.length - 1] : "알 수 없음"
-                const cleanTitle = titleParts.slice(0, -1).join(" - ")
-
-                // 날짜 형식 변환
-                let publishedAt: string
-                if (newsItem.pub_date) {
-                  try {
-                    publishedAt = new Date(newsItem.pub_date.replace(" ", "T") + ":00").toISOString()
-                  } catch {
-                    publishedAt = new Date().toISOString()
-                  }
-                } else {
+              // 날짜 형식 변환
+              let publishedAt: string
+              if (newsItem.date) {
+                try {
+                  publishedAt = new Date(newsItem.date + "T00:00:00").toISOString()
+                } catch {
                   publishedAt = new Date().toISOString()
                 }
+              } else {
+                publishedAt = new Date().toISOString()
+              }
 
-                // 관련도 점수 계산
-                const relevanceScore = calculateRelevanceScore(cleanTitle)
+              // 관련도 점수 계산 (기본값은 newsItem.score 사용)
+              const relevanceScore = newsItem.score || calculateRelevanceScore(newsItem.title)
 
-                newsData.push({
-                  id: Date.now() + Math.random(), // 고유 ID 생성
-                  title: cleanTitle,
-                  summary: `${originalCategory} 관련 뉴스입니다.`,
-                  source: source,
-                  publishedAt: publishedAt,
-                  category: categorizeNews(cleanTitle, originalCategory) || originalCategory,
-                  relevanceScore: relevanceScore,
-                  url: newsItem.link || newsItem.url || "#",
-                })
+              newsData.push({
+                id: Date.now() + index,
+                title: newsItem.title || "제목 없음",
+                summary: `${cleanCategory} 관련 뉴스입니다.`,
+                source: newsItem.press || "알 수 없음",
+                publishedAt: publishedAt,
+                category: categorizeNews(newsItem.title, cleanCategory) || cleanCategory,
+                relevanceScore: relevanceScore,
+                url: newsItem.url || "#",
               })
+
+              console.log(`[v0] 뉴스 ${index + 1} 파싱 완료:`, newsItem.title?.substring(0, 50))
+            } catch (itemError) {
+              console.log(`[v0] 뉴스 항목 ${index} 파싱 실패:`, itemError)
             }
-          } catch (parseError) {
-            console.log(`[v0] 카테고리 ${index} 파싱 실패:`, parseError)
-          }
-        })
+          })
+        } else {
+          console.log("[v0] news_briefing 배열을 찾을 수 없음")
+        }
+      } catch (resultError) {
+        console.log("[v0] result 데이터 파싱 실패:", resultError)
       }
     }
 
@@ -223,9 +201,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: newsData, // 이미 파싱된 NewsItem[] 배열
+      data: newsData,
       message: `${newsData.length}건의 뉴스를 수집했습니다.`,
-      totalCategories: outputs?.output ? outputs.output.length : 0,
+      totalCategories: newsData.length > 0 ? 1 : 0,
     })
   } catch (error) {
     console.error("[v0] 뉴스 수집 API 오류:", error)
