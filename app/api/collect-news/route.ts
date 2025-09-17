@@ -108,26 +108,49 @@ export async function POST(request: NextRequest) {
 
     if (apiResponse.result) {
       console.log("[v0] result 필드 발견, 타입:", typeof apiResponse.result)
+      console.log("[v0] result 내용 미리보기:", apiResponse.result.substring(0, 200))
 
       try {
-        // result가 문자열 형태의 JSON 코드 블록인 경우 처리
         let resultData = apiResponse.result
 
         // \`\`\`json으로 감싸진 경우 추출
         if (typeof resultData === "string" && resultData.includes("```json")) {
+          console.log("[v0] JSON 코드 블록 형태 감지")
           const jsonMatch = resultData.match(/```json\n([\s\S]*?)\n```/)
           if (jsonMatch && jsonMatch[1]) {
+            console.log("[v0] JSON 코드 블록 추출 시도")
             resultData = JSON.parse(jsonMatch[1])
             console.log("[v0] JSON 코드 블록에서 데이터 추출 성공")
+          } else {
+            console.log("[v0] JSON 코드 블록 매칭 실패")
+          }
+        } else if (typeof resultData === "string") {
+          console.log("[v0] 단순 JSON 문자열 파싱 시도")
+          try {
+            resultData = JSON.parse(resultData)
+            console.log("[v0] JSON 문자열 파싱 성공")
+          } catch (stringParseError) {
+            console.log("[v0] JSON 문자열 파싱 실패:", stringParseError)
           }
         }
 
+        console.log("[v0] 파싱된 resultData 타입:", typeof resultData)
+        console.log("[v0] 파싱된 resultData 키들:", typeof resultData === "object" ? Object.keys(resultData) : "N/A")
+
         // news_briefing 배열 처리
-        if (resultData.news_briefing && Array.isArray(resultData.news_briefing)) {
+        if (resultData && resultData.news_briefing && Array.isArray(resultData.news_briefing)) {
           console.log("[v0] news_briefing 배열 발견, 총", resultData.news_briefing.length, "개 뉴스")
 
           resultData.news_briefing.forEach((newsItem: any, index: number) => {
             try {
+              console.log(`[v0] 뉴스 ${index + 1} 처리 중:`, {
+                title: newsItem.title?.substring(0, 50),
+                category: newsItem.category,
+                press: newsItem.press,
+                date: newsItem.date,
+                score: newsItem.score,
+              })
+
               // 카테고리에서 대괄호 제거
               const cleanCategory = newsItem.category ? newsItem.category.replace(/[[\]]/g, "") : "기타"
 
@@ -164,13 +187,15 @@ export async function POST(request: NextRequest) {
           })
         } else {
           console.log("[v0] news_briefing 배열을 찾을 수 없음")
+          console.log("[v0] resultData 구조:", JSON.stringify(resultData, null, 2).substring(0, 500))
         }
       } catch (resultError) {
         console.log("[v0] result 데이터 파싱 실패:", resultError)
       }
+    } else {
+      console.log("[v0] result 필드가 없음")
     }
 
-    // 뉴스 데이터가 없으면 Mock 데이터 사용
     if (newsData.length === 0) {
       console.log("[v0] 실제 뉴스 데이터가 없어 Mock 데이터 사용")
       newsData = [
@@ -182,7 +207,7 @@ export async function POST(request: NextRequest) {
           publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
           category: "재생에너지",
           relevanceScore: 93,
-          url: "#",
+          url: "javascript:void(0)",
         },
         {
           id: Date.now() + 2,
@@ -192,12 +217,13 @@ export async function POST(request: NextRequest) {
           publishedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
           category: "LNG",
           relevanceScore: 89,
-          url: "#",
+          url: "javascript:void(0)",
         },
       ]
     }
 
     console.log("[v0] 최종 처리된 뉴스 데이터 개수:", newsData.length)
+    console.log("[v0] 첫 번째 뉴스 샘플:", newsData[0])
 
     return NextResponse.json({
       success: true,
@@ -217,7 +243,7 @@ export async function POST(request: NextRequest) {
         publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
         category: "재생에너지",
         relevanceScore: 93,
-        url: "#",
+        url: "javascript:void(0)",
       },
       {
         id: Date.now() + 2,
@@ -227,7 +253,7 @@ export async function POST(request: NextRequest) {
         publishedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
         category: "LNG",
         relevanceScore: 89,
-        url: "#",
+        url: "javascript:void(0)",
       },
     ]
 
