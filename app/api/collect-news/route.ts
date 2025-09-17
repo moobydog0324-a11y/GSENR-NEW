@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     })
 
     const controller = new AbortController()
-    const timeoutDuration = 600000 // 10분으로 변경
+    const timeoutDuration = 900000 // 15분으로 변경
     const timeoutId = setTimeout(() => {
       console.log("[v0] 요청 타임아웃 발생")
       controller.abort()
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 
     let response: Response
     let retryCount = 0
-    const maxRetries = 5
+    const maxRetries = 10
 
     while (retryCount < maxRetries) {
       try {
@@ -143,11 +143,13 @@ export async function POST(request: NextRequest) {
           const responseText = await response.text()
           console.log(`[v0] HTML 응답 감지 (재시도 필요):`, responseText.substring(0, 200))
           throw new Error(`HTML 응답 수신: ${responseText.substring(0, 100)}`)
-        } else if (response.status >= 500 && retryCount < maxRetries - 1) {
+        } else if ((response.status >= 500 || response.status === 502) && retryCount < maxRetries - 1) {
           // 서버 오류면 재시도
           console.log(`[v0] 서버 오류 (${response.status}), 재시도 중...`)
           retryCount++
-          await new Promise((resolve) => setTimeout(resolve, 5000 * retryCount)) // 5초씩 증가
+          const waitTime = 10000 * retryCount // 10초씩 증가
+          console.log(`[v0] ${waitTime / 1000}초 대기 후 재시도...`)
+          await new Promise((resolve) => setTimeout(resolve, waitTime))
           continue
         } else {
           // 클라이언트 오류면 즉시 실패
@@ -159,7 +161,9 @@ export async function POST(request: NextRequest) {
           throw fetchError
         }
         retryCount++
-        await new Promise((resolve) => setTimeout(resolve, 5000 * retryCount))
+        const waitTime = 10000 * retryCount
+        console.log(`[v0] ${waitTime / 1000}초 대기 후 재시도...`)
+        await new Promise((resolve) => setTimeout(resolve, waitTime))
       }
     }
 
@@ -355,7 +359,7 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof Error) {
       if (error.name === "AbortError") {
-        errorMessage = "요청 시간이 초과되었습니다 (10분)"
+        errorMessage = "요청 시간이 초과되었습니다 (15분)"
         errorCode = "TIMEOUT"
       } else if (error.message.includes("fetch")) {
         errorMessage = "네트워크 연결에 실패했습니다"
