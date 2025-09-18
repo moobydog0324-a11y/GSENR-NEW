@@ -88,6 +88,10 @@ export async function POST(request: NextRequest) {
       apiKey: misoApiKey ? "설정됨" : "미설정",
       actualEndpoint: misoEndpoint,
     })
+    
+    console.log("[v0] 환경 변수 상세 정보:")
+    console.log("- MISO_ENDPOINT:", process.env.MISO_ENDPOINT)
+    console.log("- MISO_API_KEY:", process.env.MISO_API_KEY ? "설정됨" : "미설정")
 
     // Mock 데이터 사용 여부 확인
     const useMockData = !misoEndpoint || !misoApiKey || misoEndpoint.includes('your-miso-endpoint.com')
@@ -244,8 +248,12 @@ export async function POST(request: NextRequest) {
           if (jsonMatch && jsonMatch[1]) {
             console.log("[v0] JSON 코드 블록 추출 시도")
             try {
-              resultData = JSON.parse(jsonMatch[1])
-              console.log("[v0] JSON 코드 블록에서 데이터 추출 성공")
+              const extractedJson = jsonMatch[1]
+              console.log("[v0] 추출된 JSON 문자열 길이:", extractedJson.length)
+              console.log("[v0] 추출된 JSON 미리보기:", extractedJson.substring(0, 200))
+              
+              resultData = JSON.parse(extractedJson)
+              console.log("[v0] JSON 코드 블록에서 데이터 추출 성공, 타입:", typeof resultData)
             } catch (jsonError) {
               console.log("[v0] JSON 코드 블록 파싱 실패:", jsonError)
               // 파싱 실패 시 원본 문자열을 그대로 사용
