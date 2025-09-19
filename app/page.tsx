@@ -94,7 +94,6 @@ export default function NewsManagementDashboard() {
     setIsLoading(true)
     try {
       const newNewsData = await callNewsAPI()
-      // 24시간 필터링 제거 - 모든 뉴스 데이터 표시
       const sortedNewsData = newNewsData.sort((a, b) => b.relevanceScore - a.relevanceScore)
 
       setNewsData(sortedNewsData)
