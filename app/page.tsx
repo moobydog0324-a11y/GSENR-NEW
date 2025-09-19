@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { RefreshCw, Calendar, Globe, Zap, Settings, CheckCircle, Copy, FileText } from "lucide-react"
+import { RefreshCw, Calendar, Globe, CheckCircle, Copy, FileText } from "lucide-react"
 
 interface NewsItem {
   id: number | string
@@ -228,7 +228,7 @@ ${selectedNewsData
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background font-sans">
       {showSuccessModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl border animate-in fade-in-0 zoom-in-95 duration-300">
@@ -237,15 +237,15 @@ ${selectedNewsData
                 <CheckCircle className="w-8 h-8 text-primary" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-semibold text-card-foreground">뉴스 수집 완료!</h3>
-                <p className="text-sm text-muted">
-                  총 <span className="font-semibold text-primary">{collectedNewsCount}건</span>의 뉴스를 성공적으로
-                  수집했습니다.
+                <h3 className="text-xl font-semibold text-card-foreground">뉴스 수집이 완료되었습니다</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  총 <span className="font-medium text-primary">{collectedNewsCount}건</span>의 뉴스를 성공적으로
+                  수집하였습니다.
                 </p>
               </div>
               <Button
                 onClick={() => setShowSuccessModal(false)}
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
               >
                 확인
               </Button>
@@ -259,28 +259,24 @@ ${selectedNewsData
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-primary to-chart-1 rounded-lg flex items-center justify-center">
-                  <Zap className="h-7 w-7 text-white" />
+                <div className="w-30 h-12 rounded-lg flex items-center justify-center overflow-hidden">
+                  <img src="/gs-er-logo.png" alt="GS E&R 로고" className="w-full h-full object-contain" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-card-foreground">GS E&R 뉴스 센터</h1>
-                  <p className="text-sm text-muted">에너지 & 자원 뉴스 수집 및 관리 시스템</p>
+                  <h1 className="text-2xl font-bold text-card-foreground">GS E&R 뉴스 관리 시스템</h1>
+                  <p className="text-sm font-medium text-foreground">에너지 & 자원 분야 뉴스 수집 및 관리</p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center">
               <Button
                 variant="outline"
                 onClick={refreshNews}
                 disabled={isLoading}
-                className="border-primary/20 bg-transparent hover:bg-primary/10 text-slate-700 hover:text-slate-800 font-medium"
+                className="border-primary/20 bg-transparent hover:bg-primary/10 text-card-foreground hover:text-card-foreground font-medium"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                {isLoading ? "수집 중..." : "24시간 뉴스 수집"}
-              </Button>
-              <Button variant="outline" className="border-border text-muted hover:bg-muted/10 bg-transparent">
-                <Settings className="h-4 w-4 mr-2" />
-                설정
+                {isLoading ? "뉴스 수집 중..." : "뉴스 수집 시작"}
               </Button>
             </div>
           </div>
@@ -293,7 +289,7 @@ ${selectedNewsData
             <Card className="bg-card shadow-sm border-border">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-3">
-                  <span className="text-sm font-medium text-card-foreground tracking-widest">카테고리:</span>
+                  <span className="text-sm font-semibold text-card-foreground">카테고리 필터:</span>
                   <div className="flex flex-wrap gap-2">
                     {getUniqueCategories().map((category) => (
                       <Button
@@ -303,8 +299,8 @@ ${selectedNewsData
                         onClick={() => setCategoryFilter(category)}
                         className={
                           categoryFilter === category
-                            ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                            : "border-border text-muted hover:bg-muted/10"
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+                            : "border-border text-muted-foreground hover:bg-muted/10 font-medium"
                         }
                       >
                         {category}
@@ -315,13 +311,13 @@ ${selectedNewsData
               </CardContent>
             </Card>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               {filteredNews.map((news) => (
                 <Card
                   key={news.id}
                   className="bg-card hover:shadow-md transition-all duration-200 cursor-pointer group border-border"
                 >
-                  <CardContent className="p-4">
+                  <CardContent className="p-5">
                     <div className="flex items-start space-x-4">
                       <div className="flex items-center justify-center pt-1">
                         <Checkbox
@@ -331,29 +327,29 @@ ${selectedNewsData
                           onCheckedChange={(checked) => {
                             handleNewsSelection(news.id, checked as boolean)
                           }}
-                          className="h-6 w-6 border-2 border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                          className="h-5 w-5 border-2 border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                         />
                       </div>
                       <div className="flex-1 min-w-0" onClick={() => handleNewsClick(news.url)}>
                         <div className="flex items-start justify-between gap-3">
-                          <h3 className="font-semibold text-card-foreground text-xl leading-tight group-hover:text-primary transition-colors">
+                          <h3 className="font-semibold text-card-foreground text-lg leading-tight group-hover:text-primary transition-colors line-clamp-2">
                             {news.title}
                           </h3>
-                          <Badge className="bg-accent text-accent-foreground text-base px-3 py-1 flex-shrink-0">
+                          <Badge className="bg-accent text-accent-foreground text-sm px-2 py-1 flex-shrink-0 font-medium">
                             {news.relevanceScore}%
                           </Badge>
                         </div>
-                        <div className="flex items-center space-x-3 text-base text-muted mt-2">
+                        <div className="flex items-center space-x-3 text-sm text-muted-foreground mt-3 font-medium">
                           <span className="flex items-center">
-                            <Globe className="h-5 w-5 mr-1" />
+                            <Globe className="h-4 w-4 mr-1.5" />
                             {news.source}
                           </span>
                           <span>•</span>
                           <span className="flex items-center">
-                            <Calendar className="h-5 w-5 mr-1" />
+                            <Calendar className="h-4 w-4 mr-1.5" />
                             {new Date(news.publishedAt).toLocaleDateString("ko-KR")}
                           </span>
-                          <Badge variant="outline" className="border-border text-muted text-sm">
+                          <Badge variant="outline" className="border-border text-muted-foreground text-xs font-medium">
                             {news.category}
                           </Badge>
                         </div>
@@ -370,32 +366,34 @@ ${selectedNewsData
               <CardContent className="p-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-card-foreground">선택된 뉴스</h3>
-                    <Badge className="bg-primary text-primary-foreground">{selectedNews.length}개 선택</Badge>
+                    <h3 className="text-lg font-semibold text-card-foreground">선택된 뉴스 목록</h3>
+                    <Badge className="bg-primary text-primary-foreground font-medium">
+                      {selectedNews.length}개 선택됨
+                    </Badge>
                   </div>
 
                   {selectedNews.length > 0 ? (
                     <>
                       <div className="space-y-3">
                         <div className="p-4 bg-muted/20 rounded-lg border border-border">
-                          <h4 className="text-sm font-medium mb-3 text-card-foreground flex items-center">
+                          <h4 className="text-sm font-semibold mb-3 text-card-foreground flex items-center">
                             <FileText className="h-4 w-4 mr-2" />
-                            HTML 미리보기:
+                            HTML 문서 미리보기
                           </h4>
                           <div className="text-sm leading-relaxed text-card-foreground space-y-2">
                             <div className="bg-primary/10 p-3 rounded border-l-4 border-primary">
-                              <p>
-                                안녕하십니까. 미래전략부문 대외협력팀 입니다.
+                              <p className="font-medium">
+                                안녕하십니까. 미래전략부문 대외협력팀입니다.
                                 <br />
-                                오늘의 주요 기사를 게시합니다.
+                                금일 주요 뉴스를 공유드립니다.
                               </p>
                             </div>
                             <ol className="list-decimal list-inside space-y-1">
                               {getSelectedNewsData().map((news, index) => {
                                 const category =
-                                  news.category && news.category !== "기타" ? `[${news.category}] ` : "[기타] "
+                                  news.category && news.category !== "기타" ? `[${news.category}] ` : `[기타] `
                                 return (
-                                  <li key={news.id} className="text-primary hover:text-primary/80">
+                                  <li key={news.id} className="text-primary hover:text-primary/80 font-medium">
                                     <a href={news.url || news.link || "#"} className="underline">
                                       {category}
                                       {news.title}({news.source})
@@ -414,7 +412,7 @@ ${selectedNewsData
                             <div className="text-sm font-medium line-clamp-2 mb-1 text-card-foreground">
                               {index + 1}. {news.title}
                             </div>
-                            <div className="text-xs text-muted">
+                            <div className="text-xs text-muted-foreground font-medium">
                               {news.source} • {new Date(news.publishedAt).toLocaleDateString("ko-KR")}
                             </div>
                           </div>
@@ -424,26 +422,26 @@ ${selectedNewsData
                       <div className="space-y-2">
                         <Button
                           onClick={copyHTMLToClipboard}
-                          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-base py-3"
+                          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm py-3 font-medium"
                         >
-                          <Copy className="h-5 w-5 mr-2" />
-                          완전한 HTML 문서로 복사
+                          <Copy className="h-4 w-4 mr-2" />
+                          HTML 문서로 복사하기
                         </Button>
                         <Button
                           onClick={copyToClipboard}
                           variant="outline"
-                          className="w-full border-border text-muted hover:bg-muted/10 bg-transparent"
+                          className="w-full border-border text-muted-foreground hover:bg-muted/10 bg-transparent font-medium"
                         >
-                          텍스트로 복사
+                          텍스트 형식으로 복사하기
                         </Button>
                       </div>
                     </>
                   ) : (
                     <div className="text-center py-12">
                       <div className="w-16 h-16 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle className="w-8 h-8 text-muted" />
+                        <CheckCircle className="w-8 h-8 text-muted-foreground" />
                       </div>
-                      <p className="text-muted text-sm">뉴스를 선택해주세요</p>
+                      <p className="text-muted-foreground text-sm font-medium">뉴스를 선택하여 주시기 바랍니다</p>
                     </div>
                   )}
                 </div>
