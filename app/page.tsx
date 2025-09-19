@@ -263,7 +263,7 @@ ${selectedNewsData
                   <img src="/gs-er-logo.png" alt="GS E&R 로고" className="w-full h-full object-contain" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-card-foreground">GS E&R 뉴스 관리 시스템</h1>
+                  <h1 className="text-2xl font-bold text-card-foreground">뉴스 관리 시스템</h1>
                   <p className="text-sm font-medium text-foreground">에너지 & 자원 분야 뉴스 수집 및 관리</p>
                 </div>
               </div>
@@ -289,7 +289,7 @@ ${selectedNewsData
             <Card className="bg-card shadow-sm border-border">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-3">
-                  <span className="text-sm font-semibold text-card-foreground">카테고리 필터:</span>
+                  <span className="text-sm font-semibold text-card-foreground">카테고리 :</span>
                   <div className="flex flex-wrap gap-2">
                     {getUniqueCategories().map((category) => (
                       <Button
