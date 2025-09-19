@@ -60,6 +60,12 @@ export async function POST(request: NextRequest) {
     console.log("[v0] 환경변수 확인:")
     console.log(`[v0] - MISO_ENDPOINT: ${misoEndpoint ? "설정됨" : "미설정"}`)
     console.log(`[v0] - MISO_API_KEY: ${misoApiKey ? "설정됨" : "미설정"}`)
+    if (misoEndpoint) {
+      console.log(`[v0] - MISO_ENDPOINT 값: ${misoEndpoint.substring(0, 30)}...`)
+    }
+    if (misoApiKey) {
+      console.log(`[v0] - MISO_API_KEY 길이: ${misoApiKey.length}자`)
+    }
 
     if (!misoEndpoint || !misoApiKey) {
       console.log("[v0] 필수 환경변수 누락")
