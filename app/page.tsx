@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { RefreshCw, Calendar, Globe, Zap, Settings, CheckCircle, Copy, FileText } from "lucide-react"
+import { RefreshCw, Calendar, Globe, Settings, CheckCircle, Copy, FileText } from "lucide-react"
 
 interface NewsItem {
   id: number | string
@@ -259,11 +259,11 @@ ${selectedNewsData
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-primary to-chart-1 rounded-lg flex items-center justify-center">
-                  <Zap className="h-7 w-7 text-white" />
+                <div className="w-48 h-16 rounded-lg flex items-center justify-center overflow-hidden">
+                  <img src="/gs-er-logo.png" alt="GS E&R 로고" className="w-full h-full object-contain" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-card-foreground">GS E&R 뉴스 센터</h1>
+                  <h1 className="text-2xl font-bold text-card-foreground">뉴스 수집 센터</h1>
                   <p className="text-sm text-muted">에너지 & 자원 뉴스 수집 및 관리 시스템</p>
                 </div>
               </div>
