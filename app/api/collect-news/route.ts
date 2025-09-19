@@ -80,8 +80,9 @@ const parseJsonSafely = (data: any, maxDepth: number = 3): any => {
 
 export async function POST(request: NextRequest) {
   try {
-    const misoEndpoint = process.env.MISO_ENDPOINT
-    const misoApiKey = process.env.MISO_API_KEY
+    // 환경 변수 직접 설정 (테스트용)
+    const misoEndpoint = "https://api.holdings.miso.gs/ext/v1/workflows/run"
+    const misoApiKey = "app-g7ZVRsz5ELaTwjb4xTfDwC7l"
 
     console.log("[v0] 미소 API 설정 확인:", {
       endpoint: misoEndpoint ? "설정됨" : "미설정",
@@ -93,8 +94,8 @@ export async function POST(request: NextRequest) {
     console.log("- MISO_ENDPOINT:", process.env.MISO_ENDPOINT)
     console.log("- MISO_API_KEY:", process.env.MISO_API_KEY ? "설정됨" : "미설정")
 
-    // Mock 데이터 사용 여부 확인
-    const useMockData = !misoEndpoint || !misoApiKey || misoEndpoint.includes('your-miso-endpoint.com')
+    // Mock 데이터 사용 여부 확인 (실제 API 테스트를 위해 false로 설정)
+    const useMockData = false
     
     if (useMockData) {
       console.log("[v0] Mock 데이터 사용 모드")
