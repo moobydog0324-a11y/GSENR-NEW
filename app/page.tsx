@@ -293,7 +293,7 @@ ${selectedNewsData
             <Card className="bg-card shadow-sm border-border">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-3">
-                  <span className="text-sm font-medium text-card-foreground">카테고리:</span>
+                  <span className="text-sm font-medium text-card-foreground tracking-widest">카테고리:</span>
                   <div className="flex flex-wrap gap-2">
                     {getUniqueCategories().map((category) => (
                       <Button
