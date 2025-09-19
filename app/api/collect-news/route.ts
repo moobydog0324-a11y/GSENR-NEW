@@ -60,12 +60,6 @@ export async function POST(request: NextRequest) {
     console.log("[v0] 환경변수 확인:")
     console.log(`[v0] - MISO_ENDPOINT: ${misoEndpoint ? "설정됨" : "미설정"}`)
     console.log(`[v0] - MISO_API_KEY: ${misoApiKey ? "설정됨" : "미설정"}`)
-    if (misoEndpoint) {
-      console.log(`[v0] - MISO_ENDPOINT 값: ${misoEndpoint.substring(0, 30)}...`)
-    }
-    if (misoApiKey) {
-      console.log(`[v0] - MISO_API_KEY 길이: ${misoApiKey.length}자`)
-    }
 
     if (!misoEndpoint || !misoApiKey) {
       console.log("[v0] 필수 환경변수 누락")
@@ -78,21 +72,26 @@ export async function POST(request: NextRequest) {
     }
 
     let apiUrl: string
-    if (misoEndpoint.endsWith("/ext/v1")) {
-      apiUrl = `${misoEndpoint}/workflows/run`
-    } else if (misoEndpoint.includes("/ext/v1/")) {
+    if (misoEndpoint.includes("/workflows/run")) {
       // 이미 전체 경로가 포함된 경우
       apiUrl = misoEndpoint
+    } else if (misoEndpoint.endsWith("/ext/v1")) {
+      // /ext/v1로 끝나는 경우
+      apiUrl = `${misoEndpoint}/workflows/run`
+    } else if (misoEndpoint.includes("/ext/v1")) {
+      // 중간에 /ext/v1이 포함된 경우
+      apiUrl = misoEndpoint.replace(/\/ext\/v1.*$/, "/ext/v1/workflows/run")
     } else {
       // 기본 도메인만 있는 경우
       apiUrl = `${misoEndpoint}/ext/v1/workflows/run`
     }
-    console.log(`[v0] API URL: ${apiUrl}`)
+
+    console.log(`[v0] 최종 API URL: ${apiUrl}`)
 
     const requestBody = {
-      inputs: {},
-      mode: "blocking",
-      user: "gs-er-news-system",
+      inputs: {}, // 필수 필드
+      mode: "blocking", // blocking 또는 streaming
+      user: "gs-er-news-system", // 필수 필드
     }
 
     console.log("[v0] MISO API 호출 시작...")
@@ -108,7 +107,7 @@ export async function POST(request: NextRequest) {
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${misoApiKey}`, // 가이드에 따른 정확한 헤더 형식
+          Authorization: `Bearer ${misoApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(requestBody),
@@ -118,10 +117,21 @@ export async function POST(request: NextRequest) {
       clearTimeout(timeoutId)
 
       console.log(`[v0] 응답 상태: ${response.status} ${response.statusText}`)
+      console.log(`[v0] 응답 헤더:`, Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
         const errorText = await response.text()
         console.log(`[v0] API 오류 응답: ${errorText}`)
+
+        if (response.status === 401) {
+          return NextResponse.json({
+            success: false,
+            message: "뉴스 수집을 실패하였습니다.",
+            data: [],
+            error: "MISO API 인증 실패. API 키를 확인해주세요.",
+          })
+        }
+
         return NextResponse.json({
           success: false,
           message: "뉴스 수집을 실패하였습니다.",
@@ -151,7 +161,6 @@ export async function POST(request: NextRequest) {
 
       const newsData: NewsItem[] = []
 
-      // 가이드에 따르면 blocking 모드에서는 data.outputs에 결과가 있음
       if (apiResponse.data?.status === "succeeded" && apiResponse.data?.outputs) {
         console.log("[v0] MISO API 성공 응답 확인")
         console.log(`[v0] 출력 키들: ${JSON.stringify(Object.keys(apiResponse.data.outputs))}`)
@@ -162,7 +171,10 @@ export async function POST(request: NextRequest) {
         // outputs에서 뉴스 데이터 찾기
         for (const [key, value] of Object.entries(outputs)) {
           console.log(`[v0] 출력 키 ${key} 확인 중...`)
-          if (typeof value === "string" && (value.includes("news_briefing") || value.includes("뉴스"))) {
+          if (
+            typeof value === "string" &&
+            (value.includes("news_briefing") || value.includes("뉴스") || value.includes("title"))
+          ) {
             console.log(`[v0] outputs.${key}에서 뉴스 데이터 발견`)
             resultData = value
             break
