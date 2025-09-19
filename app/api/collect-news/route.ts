@@ -77,7 +77,16 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const apiUrl = `${misoEndpoint}/ext/v1/workflows/run`
+    let apiUrl: string
+    if (misoEndpoint.endsWith("/ext/v1")) {
+      apiUrl = `${misoEndpoint}/workflows/run`
+    } else if (misoEndpoint.includes("/ext/v1/")) {
+      // 이미 전체 경로가 포함된 경우
+      apiUrl = misoEndpoint
+    } else {
+      // 기본 도메인만 있는 경우
+      apiUrl = `${misoEndpoint}/ext/v1/workflows/run`
+    }
     console.log(`[v0] API URL: ${apiUrl}`)
 
     const requestBody = {
