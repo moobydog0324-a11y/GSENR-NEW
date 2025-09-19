@@ -272,18 +272,78 @@ export async function POST(request: NextRequest) {
         console.log("[v0] 파싱된 resultData 키들:", typeof resultData === "object" ? Object.keys(resultData) : "N/A")
         console.log("[v0] 파싱된 resultData 전체 내용:", JSON.stringify(resultData, null, 2).substring(0, 1000))
 
-        // resultData가 여전히 문자열인 경우 다시 파싱 시도
-        if (typeof resultData === "string") {
-          console.log("[v0] resultData가 여전히 문자열, 재파싱 시도")
-          try {
-            resultData = JSON.parse(resultData)
-            console.log("[v0] 재파싱 성공")
-          } catch (reparseError) {
-            console.log("[v0] 재파싱 실패:", reparseError)
-            // 재파싱 실패 시 원본 문자열을 그대로 사용
-            console.log("[v0] 원본 문자열을 그대로 사용")
-          }
-        }
+               // resultData가 여전히 문자열인 경우 다시 파싱 시도
+               if (typeof resultData === "string") {
+                 console.log("[v0] resultData가 여전히 문자열, 재파싱 시도")
+                 
+                 // 정규식으로 직접 news_briefing 배열 추출
+                 try {
+                   console.log("[v0] 정규식으로 news_briefing 배열 추출 시도")
+                   
+                   // 더 유연한 정규식으로 news_briefing 배열 찾기
+                   const newsMatch = resultData.match(/"news_briefing"\s*:\s*\[([\s\S]*?)\]\s*\}/)
+                   if (newsMatch && newsMatch[1]) {
+                     console.log("[v0] news_briefing 배열 발견, 정규식으로 파싱")
+                     console.log("[v0] 추출된 배열 내용 (처음 500자):", newsMatch[1].substring(0, 500))
+                     
+                     // 개별 뉴스 항목들을 정규식으로 추출 (더 유연한 패턴)
+                     const newsItems = []
+                     
+                     // 각 뉴스 항목을 찾는 정규식 (줄바꿈과 공백을 고려)
+                     const itemRegex = /\{\s*"score"\s*:\s*(\d+)\s*,\s*"category"\s*:\s*"([^"]+)"\s*,\s*"date"\s*:\s*"([^"]+)"\s*,\s*"press"\s*:\s*"([^"]+)"\s*,\s*"title"\s*:\s*"([^"]+)"\s*,\s*"url"\s*:\s*"([^"]+)"\s*\}/g
+                     
+                     let match
+                     let count = 0
+                     while ((match = itemRegex.exec(newsMatch[1])) !== null && count < 50) {
+                       count++
+                       newsItems.push({
+                         score: parseInt(match[1]),
+                         category: match[2],
+                         date: match[3],
+                         press: match[4],
+                         title: match[5],
+                         url: match[6]
+                       })
+                       console.log(`[v0] 뉴스 항목 ${count} 추출:`, match[5].substring(0, 30))
+                     }
+                     
+                     if (newsItems.length > 0) {
+                       resultData = { news_briefing: newsItems }
+                       console.log(`[v0] 정규식으로 ${newsItems.length}개 뉴스 항목 추출 성공`)
+                     } else {
+                       console.log("[v0] 정규식으로 뉴스 항목을 찾을 수 없음")
+                       
+                       // 대안: 수동으로 JSON 구조 재구성
+                       try {
+                         console.log("[v0] 수동 JSON 재구성 시도")
+                         const manualJson = `{"news_briefing": [${newsMatch[1]}]}`
+                         resultData = JSON.parse(manualJson)
+                         console.log("[v0] 수동 JSON 재구성 성공")
+                       } catch (manualError) {
+                         console.log("[v0] 수동 JSON 재구성 실패:", manualError)
+                       }
+                     }
+                   } else {
+                     console.log("[v0] news_briefing 배열을 찾을 수 없음")
+                   }
+                 } catch (regexError) {
+                   console.log("[v0] 정규식 파싱 실패:", regexError)
+                   
+                   // 대안: 단순한 JSON 파싱 시도
+                   try {
+                     const cleanedJson = resultData
+                       .replace(/\n/g, '')
+                       .replace(/\r/g, '')
+                       .replace(/\t/g, '')
+                       .trim()
+                     
+                     resultData = JSON.parse(cleanedJson)
+                     console.log("[v0] 단순 JSON 파싱 성공")
+                   } catch (simpleError) {
+                     console.log("[v0] 단순 JSON 파싱도 실패:", simpleError)
+                   }
+                 }
+               }
 
         // news_briefing 배열 처리
         if (resultData && resultData.news_briefing && Array.isArray(resultData.news_briefing)) {
@@ -337,11 +397,18 @@ export async function POST(request: NextRequest) {
           console.log("[v0] news_briefing 배열을 찾을 수 없음")
           console.log("[v0] resultData 구조:", JSON.stringify(resultData, null, 2).substring(0, 500))
           
-          // resultData가 문자열인 경우 직접 파싱 시도
-          if (typeof resultData === "string") {
-            console.log("[v0] 문자열 resultData를 직접 파싱 시도")
-            try {
-              const parsedData = JSON.parse(resultData)
+                 // resultData가 문자열인 경우 직접 파싱 시도
+                 if (typeof resultData === "string") {
+                   console.log("[v0] 문자열 resultData를 직접 파싱 시도")
+                   try {
+                     // JSON 문자열 정리
+                     const cleanedJson = resultData
+                       .replace(/\n/g, '')
+                       .replace(/\r/g, '')
+                       .replace(/\t/g, '')
+                       .trim()
+                     
+                     const parsedData = JSON.parse(cleanedJson)
               if (parsedData && parsedData.news_briefing && Array.isArray(parsedData.news_briefing)) {
                 console.log("[v0] 직접 파싱으로 news_briefing 배열 발견, 총", parsedData.news_briefing.length, "개 뉴스")
                 
@@ -456,6 +523,12 @@ export async function POST(request: NextRequest) {
       console.log("[v0] API 응답 구조:", JSON.stringify(apiResponse, null, 2).substring(0, 500))
     }
 
+    console.log("[v0] newsData 배열 상태:", {
+      length: newsData.length,
+      isEmpty: newsData.length === 0,
+      firstItem: newsData[0] || "없음"
+    })
+    
     if (newsData.length === 0) {
       console.log("[v0] 실제 뉴스 데이터가 없어 Mock 데이터 사용")
       newsData = [

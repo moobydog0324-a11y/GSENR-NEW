@@ -94,11 +94,11 @@ export default function NewsManagementDashboard() {
     setIsLoading(true)
     try {
       const newNewsData = await callNewsAPI()
-      const filteredNewsData = filterLast24Hours(newNewsData)
-      const sortedNewsData = filteredNewsData.sort((a, b) => b.relevanceScore - a.relevanceScore)
+      // 24시간 필터링 제거 - 모든 뉴스 데이터 표시
+      const sortedNewsData = newNewsData.sort((a, b) => b.relevanceScore - a.relevanceScore)
 
       setNewsData(sortedNewsData)
-      setCollectedNewsCount(filteredNewsData.length)
+      setCollectedNewsCount(newNewsData.length)
       setShowSuccessModal(true)
     } catch (error) {
       console.error("[v0] 뉴스 수집 실패:", error)
