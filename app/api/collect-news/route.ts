@@ -60,6 +60,14 @@ export async function POST(request: NextRequest) {
     console.log(`[v0] MISO_ENDPOINT: ${misoEndpoint ? "설정됨" : "❌ 미설정"}`)
     console.log(`[v0] MISO_API_KEY: ${misoApiKey ? "설정됨" : "❌ 미설정"}`)
 
+    if (misoEndpoint) {
+      console.log(`[v0] 엔드포인트 시작: ${misoEndpoint.substring(0, 30)}...`)
+    }
+    if (misoApiKey) {
+      console.log(`[v0] API 키 시작: ${misoApiKey.substring(0, 10)}...`)
+      console.log(`[v0] API 키 길이: ${misoApiKey.length}자`)
+    }
+
     if (!misoEndpoint || !misoApiKey) {
       console.log("[v0] ❌ 필수 환경변수 누락")
       return NextResponse.json({
@@ -71,12 +79,15 @@ export async function POST(request: NextRequest) {
     }
 
     let apiUrl: string
-    if (misoEndpoint.endsWith("/ext/v1/workflows/run")) {
+    if (misoEndpoint.includes("/ext/v1/workflows/run")) {
       // 이미 완전한 경로인 경우
       apiUrl = misoEndpoint
     } else if (misoEndpoint.endsWith("/ext/v1")) {
       // /ext/v1까지만 있는 경우
       apiUrl = `${misoEndpoint}/workflows/run`
+    } else if (misoEndpoint.endsWith("/")) {
+      // 슬래시로 끝나는 경우
+      apiUrl = `${misoEndpoint}ext/v1/workflows/run`
     } else {
       // 기본 도메인만 있는 경우
       apiUrl = `${misoEndpoint}/ext/v1/workflows/run`
@@ -85,13 +96,21 @@ export async function POST(request: NextRequest) {
     console.log(`[v0] 최종 API URL: ${apiUrl}`)
 
     const requestBody = {
-      inputs: {}, // 가이드에 따르면 필수이지만 빈 객체 가능
-      mode: "blocking", // 가이드에 따른 blocking 모드 사용
-      user: "gs-er-news-system", // 가이드에 따른 사용자 식별자
+      inputs: {}, // 가이드: 필수이지만 빈 객체 가능
+      mode: "blocking", // 가이드: blocking 또는 streaming
+      user: "gs-er-news-system", // 가이드: 사용자 식별자 필수
     }
 
     console.log("[v0] MISO API 호출 시작...")
     console.log(`[v0] 요청 본문: ${JSON.stringify(requestBody)}`)
+
+    const headers = {
+      Authorization: `Bearer ${misoApiKey}`,
+      "Content-Type": "application/json",
+    }
+    console.log(
+      `[v0] 요청 헤더: Authorization: Bearer ${misoApiKey.substring(0, 10)}..., Content-Type: application/json`,
+    )
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => {
@@ -102,10 +121,7 @@ export async function POST(request: NextRequest) {
     try {
       const response = await fetch(apiUrl, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${misoApiKey}`,
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(requestBody),
         signal: controller.signal,
       })
@@ -121,9 +137,10 @@ export async function POST(request: NextRequest) {
 
         let errorMessage = "MISO API 요청이 실패했습니다."
         if (response.status === 401) {
-          errorMessage = "MISO API 인증에 실패했습니다. API 키를 확인해주세요."
+          errorMessage =
+            "MISO API 인증에 실패했습니다. API 키가 올바른지 확인해주세요. Vercel 프로젝트 설정에서 MISO_API_KEY 환경변수를 다시 확인해주세요."
         } else if (response.status === 404) {
-          errorMessage = "MISO API 엔드포인트를 찾을 수 없습니다. URL을 확인해주세요."
+          errorMessage = "MISO API 엔드포인트를 찾을 수 없습니다. MISO_ENDPOINT 환경변수가 올바른지 확인해주세요."
         } else if (response.status === 400) {
           errorMessage = "MISO API 요청 형식이 올바르지 않습니다."
         }
